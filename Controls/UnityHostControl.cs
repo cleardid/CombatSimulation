@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace CombatSimulation.Controls
 {
@@ -12,7 +14,7 @@ namespace CombatSimulation.Controls
     /// WPF 普通控件没有稳定的 Win32 子窗口句柄；如果直接把 Unity 窗口挂到 WPF 主窗口上，
     /// 需要反复计算相对于主窗口客户区的坐标，页面切换和布局更新时容易出现时序问题。
     ///
-    /// 该控件通过 <see cref="HwndHost"/> 创建一个真正的 Win32 子窗口，Unity 只需要被挂到该
+    /// 该控件通过 <see cref="HwndHost"/> 创建一个真正的 Win32 子窗口。Unity 只需要被挂到该
     /// 子窗口下面，并始终定位到 (0, 0)。WPF 负责移动和裁剪该宿主 HWND，UnityWindowHost 只负责
     /// 让 Unity 窗口填满这个原生宿主区域。
     /// </remarks>
@@ -23,7 +25,13 @@ namespace CombatSimulation.Controls
         private const int WsClipChildren = 0x02000000;
         private const int WsClipSiblings = 0x04000000;
 
+        private static readonly nint HwndTop = 0;
+        private const uint SwpNoMove = 0x0002;
+        private const uint SwpNoZOrder = 0x0004;
+        private const uint SwpNoActivate = 0x0010;
+
         private nint _hostHwnd;
+        private bool _boundsNotificationPending;
 
         /// <summary>
         /// 原生宿主窗口句柄。句柄尚未创建或已经销毁时为 0。
@@ -41,7 +49,7 @@ namespace CombatSimulation.Controls
         public event EventHandler? NativeHostBoundsChanged;
 
         /// <summary>
-        /// 获取原生宿主窗口当前客户区尺寸，单位为 Win32 像素。
+        /// 获取原生宿主窗口当前客户区尺寸，单位为 Win32 物理像素。
         /// </summary>
         public bool TryGetClientSize(out int width, out int height)
         {
@@ -52,6 +60,10 @@ namespace CombatSimulation.Controls
             {
                 return false;
             }
+
+            // HwndHost 的真实 HWND 尺寸偶尔会比 WPF 布局晚一拍更新。
+            // 因此先主动按当前 WPF 布局尺寸同步一次，再读取 Win32 客户区。
+            SynchronizeNativeHostSizeFromLayout();
 
             if (!GetClientRect(_hostHwnd, out WindowRect rect))
             {
@@ -84,7 +96,10 @@ namespace CombatSimulation.Controls
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "创建 Unity 原生宿主窗口失败。");
             }
 
+            SynchronizeNativeHostSizeFromLayout();
             NativeHostChanged?.Invoke(this, EventArgs.Empty);
+            QueueBoundsChangedNotification();
+
             return new HandleRef(this, _hostHwnd);
         }
 
@@ -100,10 +115,67 @@ namespace CombatSimulation.Controls
             }
         }
 
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            Size arrangedSize = base.ArrangeOverride(finalSize);
+            SynchronizeNativeHostSizeFromLayout();
+            QueueBoundsChangedNotification();
+            return arrangedSize;
+        }
+
+        protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+        {
+            base.OnRenderSizeChanged(sizeInfo);
+            SynchronizeNativeHostSizeFromLayout();
+            QueueBoundsChangedNotification();
+        }
+
         protected override void OnWindowPositionChanged(Rect rcBoundingBox)
         {
             base.OnWindowPositionChanged(rcBoundingBox);
-            NativeHostBoundsChanged?.Invoke(this, EventArgs.Empty);
+            SynchronizeNativeHostSizeFromLayout();
+            QueueBoundsChangedNotification();
+        }
+
+        private void QueueBoundsChangedNotification()
+        {
+            if (_boundsNotificationPending)
+            {
+                return;
+            }
+
+            _boundsNotificationPending = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _boundsNotificationPending = false;
+                NativeHostBoundsChanged?.Invoke(this, EventArgs.Empty);
+            }), DispatcherPriority.ContextIdle);
+        }
+
+        private void SynchronizeNativeHostSizeFromLayout()
+        {
+            if (_hostHwnd == 0 || !IsWindow(_hostHwnd))
+            {
+                return;
+            }
+
+            if (ActualWidth <= 0 || ActualHeight <= 0)
+            {
+                return;
+            }
+
+            Matrix transformToDevice = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+            int width = Math.Max(1, (int)Math.Round(ActualWidth * transformToDevice.M11));
+            int height = Math.Max(1, (int)Math.Round(ActualHeight * transformToDevice.M22));
+
+            SetWindowPos(
+                _hostHwnd,
+                HwndTop,
+                0,
+                0,
+                width,
+                height,
+                SwpNoMove | SwpNoZOrder | SwpNoActivate);
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -138,5 +210,15 @@ namespace CombatSimulation.Controls
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetClientRect(nint hwnd, out WindowRect rect);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(
+            nint hWnd,
+            nint hWndInsertAfter,
+            int x,
+            int y,
+            int cx,
+            int cy,
+            uint flags);
     }
 }

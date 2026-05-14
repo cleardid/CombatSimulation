@@ -343,7 +343,12 @@ namespace CombatSimulation.Services.Unity
                 }
 
                 AttachToParent(unityHwnd, snapshot.ParentHwnd);
-                ShowWindowAt(unityHwnd, snapshot.X, snapshot.Y, snapshot.Width, snapshot.Height);
+
+                // 这里不完全信任视图层传入的宽高。HwndHost 的原生子窗口可能先以旧尺寸创建，
+                // 随后才被 WPF 布局系统调整。每次显示收敛时直接读取当前父 HWND 的客户区，
+                // 可以避免 Unity 偶发只占左侧一部分区域。
+                GetEffectiveHostBounds(snapshot, out int x, out int y, out int width, out int height);
+                ShowWindowAt(unityHwnd, x, y, width, height);
             }
             finally
             {
@@ -533,6 +538,32 @@ namespace CombatSimulation.Services.Unity
                 SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
         }
 
+        private static void GetEffectiveHostBounds(HostStateSnapshot snapshot, out int x, out int y, out int width, out int height)
+        {
+            x = snapshot.X;
+            y = snapshot.Y;
+            width = snapshot.Width;
+            height = snapshot.Height;
+
+            // 当前方案中 ParentHwnd 是 UnityHostControl 创建的原生宿主窗口。
+            // Unity 应始终填满该窗口的客户区，因此优先使用 GetClientRect 的实时值。
+            if (snapshot.ParentHwnd != 0 &&
+                IsWindow(snapshot.ParentHwnd) &&
+                GetClientRect(snapshot.ParentHwnd, out WindowRect clientRect))
+            {
+                int clientWidth = Math.Max(0, clientRect.Right - clientRect.Left);
+                int clientHeight = Math.Max(0, clientRect.Bottom - clientRect.Top);
+
+                if (clientWidth > 2 && clientHeight > 2)
+                {
+                    x = 0;
+                    y = 0;
+                    width = clientWidth;
+                    height = clientHeight;
+                }
+            }
+        }
+
         private static void ShowWindowAt(nint unityHwnd, int x, int y, int width, int height)
         {
             int effectiveWidth = Math.Max(1, width);
@@ -551,7 +582,6 @@ namespace CombatSimulation.Services.Unity
                 effectiveHeight,
                 SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
 
-            ShowWindow(unityHwnd, SwRestore);
             ShowWindow(unityHwnd, SwShowNoActivate);
 
             SetWindowPos(
@@ -563,6 +593,7 @@ namespace CombatSimulation.Services.Unity
                 effectiveHeight,
                 SwpNoZOrder | SwpNoActivate | SwpFrameChanged | SwpShowWindow);
 
+            MoveWindow(unityHwnd, x, y, effectiveWidth, effectiveHeight, true);
             UpdateWindow(unityHwnd);
         }
 
@@ -729,6 +760,9 @@ namespace CombatSimulation.Services.Unity
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetWindowRect(nint hWnd, out WindowRect rect);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetClientRect(nint hWnd, out WindowRect rect);
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLong", SetLastError = true)]
         private static extern nint GetWindowLong32(nint hWnd, int nIndex);
