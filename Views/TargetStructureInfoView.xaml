@@ -1,0 +1,151 @@
+﻿<UserControl x:Class="CombatSimulation.Views.TargetStructureInfoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:unityControls="clr-namespace:CombatSimulation.Controls"
+             Loaded="OnLoaded"
+             Unloaded="OnUnloaded"
+             IsVisibleChanged="OnIsVisibleChanged">
+
+    <!-- 不要设置 DataContext。
+         这里继承 TargetInfoView 的 TargetInfoViewModel。 -->
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="800" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧：目标结构信息 -->
+        <Border Grid.Column="0"
+                Style="{DynamicResource SubCardStyle}"
+                Margin="0,0,20,0">
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="目标结构树"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               Margin="0,0,0,16" />
+
+                    <TextBlock Text="{Binding SelectedTarget.Name}"
+                               FontSize="18"
+                               FontWeight="Bold" />
+
+                    <TextBlock Text="{Binding SelectedTarget.Code}"
+                               Foreground="#BFD4F5"
+                               Margin="0,4,0,12" />
+
+                    <TextBlock Text="{Binding SelectedTarget.Description}"
+                               Foreground="#BFD4F5"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,18" />
+
+                    <TextBlock Text="结构节点"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Margin="0,0,0,10" />
+
+                    <ItemsControl ItemsSource="{Binding SelectedTarget.StructureNodes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#331E293B"
+                                        BorderBrush="#334155"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10,8"
+                                        Margin="0,0,0,8">
+
+                                    <TextBlock Text="{Binding StringFormat=▸ {0}}"
+                                               Foreground="#BFD4F5" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 右侧：Unity 模型可视化接口。仅目标结构信息页面拥有该区域。 -->
+        <StackPanel Grid.Column="1">
+            <TextBlock Text="Unity 模型可视化接口"
+                       FontSize="22"
+                       FontWeight="Bold"
+                       Margin="0,0,0,16" />
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="0,0,0,16">
+
+                <Button Content="启动预览器"
+                        Width="110"
+                        Height="34"
+                        Margin="0,0,12,0"
+                        Command="{Binding LaunchPreviewCommand}" />
+
+                <Button Content="同步当前目标"
+                        Width="120"
+                        Height="34"
+                        Margin="0,0,12,0"
+                        Command="{Binding SyncCurrentTargetCommand}" />
+
+                <Button Content="导入模型"
+                        Width="100"
+                        Height="34"
+                        Command="{Binding ImportModelCommand}" />
+            </StackPanel>
+
+            <Border x:Name="UnityHostBorder"
+                    Background="#AA050A12"
+                    BorderBrush="#26384F"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Height="600"
+                    ClipToBounds="True"
+                    SizeChanged="OnUnityHostSizeChanged">
+
+                <!--
+                    UnityHostControl 会创建一个真正的 Win32 子窗口。
+                    Unity 进程窗口被挂到该 HWND 下，始终使用 (0,0,width,height) 填满宿主窗口。
+                    不再把 Unity 直接挂到 WPF 主窗口，也不再反复计算相对于主窗口的坐标。
+                -->
+                <unityControls:UnityHostControl x:Name="UnityNativeHost"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch"
+                                                Focusable="False"
+                                                NativeHostChanged="OnUnityNativeHostChanged"
+                                                NativeHostBoundsChanged="OnUnityNativeHostBoundsChanged" />
+            </Border>
+
+            <Border Background="#CC1F2937"
+                    CornerRadius="8"
+                    Padding="12"
+                    Margin="0,16,0,0">
+
+                <StackPanel>
+                    <TextBlock Text="Unity 状态"
+                               FontWeight="Bold" />
+
+                    <TextBlock Text="{Binding UnityStatus}"
+                               Foreground="#F8FAFC"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="#CC1F2937"
+                    CornerRadius="8"
+                    Padding="12"
+                    Margin="0,16,0,0">
+
+                <StackPanel>
+                    <TextBlock Text="模块状态"
+                               FontWeight="Bold" />
+
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="#F8FAFC"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

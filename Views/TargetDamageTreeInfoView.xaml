@@ -1,0 +1,53 @@
+﻿<UserControl x:Class="CombatSimulation.Views.TargetDamageTreeInfoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 不要设置 DataContext。
+         这里继承 TargetInfoView 的 TargetInfoViewModel。 -->
+
+    <Border Style="{DynamicResource SubCardStyle}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="毁伤树信息"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           Margin="0,0,0,16" />
+
+                <TextBlock Text="{Binding SelectedTarget.Name}"
+                           FontSize="18"
+                           FontWeight="Bold" />
+
+                <TextBlock Text="{Binding SelectedTarget.Code}"
+                           Foreground="#BFD4F5"
+                           Margin="0,4,0,12" />
+
+                <TextBlock Text="毁伤树用于描述目标从命中、穿透、部件损伤到能力下降的逻辑链路。"
+                           Foreground="#BFD4F5"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,18" />
+
+                <TextBlock Text="毁伤树节点"
+                           FontSize="16"
+                           FontWeight="Bold"
+                           Margin="0,0,0,10" />
+
+                <ItemsControl ItemsSource="{Binding SelectedTarget.DamageTreeNodes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#331E293B"
+                                    BorderBrush="#334155"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10,8"
+                                    Margin="0,0,0,8">
+
+                                <TextBlock Text="{Binding StringFormat=▸ {0}}"
+                                           Foreground="#BFD4F5" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>
