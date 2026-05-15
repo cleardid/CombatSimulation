@@ -1,156 +1,180 @@
 ﻿using CombatSimulation.Models;
-using CombatSimulation.Services.Targets;
-using CombatSimulation.Services.Unity;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
+using CombatSimulation.Services.MySql;
 using System.Diagnostics;
-using System.Windows;
-using System.Windows.Data;
 
-namespace CombatSimulation.ViewModels
+namespace CombatSimulation.ViewModels;
+
+public sealed partial class TargetInfoViewModel
 {
-    public sealed partial class TargetInfoViewModel
+    /// <summary>
+    /// 目标类型筛选条件变化时刷新目标列表。
+    /// </summary>
+    partial void OnSelectedTargetCategoryChanged(string value)
     {
-        partial void OnSelectedTargetCategoryChanged(string value)
+        FilteredTargets.Refresh();
+
+        // 如果当前选中的目标不属于新的类型筛选范围，则自动切换到筛选结果中的第一个目标。
+        if (!IsSelectedTargetInCurrentFilter())
+        {
+            SelectedTarget = FilteredTargets.Cast<TargetInfoItem>().FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// 从 MySQL 仓储读取目标、系统和部件数据。
+    /// </summary>
+    private void LoadTargetsFromRepository()
+    {
+        Targets.Clear();
+
+        try
+        {
+            IReadOnlyList<TargetInfoItem> storedTargets = _targetInfoRepository.LoadTargets();
+            foreach (TargetInfoItem target in storedTargets)
+            {
+                // 数据库读取出来的是模型树，界面还需要对应的 TargetStructureTreeNode 树节点。
+                EnsureTargetStructureTree(target);
+                Targets.Add(target);
+            }
+
+            _targetLoadStatusText = Targets.Count == 0
+                ? "数据库中暂无目标信息"
+                : $"已从数据库读取 {Targets.Count} 个目标";
+            StatusText = _targetLoadStatusText;
+            MySqlLog.Log(_targetLoadStatusText);
+        }
+        catch (Exception ex)
+        {
+            _targetLoadStatusText = $"读取目标数据库失败：{ex.Message}";
+            StatusText = _targetLoadStatusText;
+            MySqlLog.LogWarning($"读取目标数据库失败：{ex}");
+            Debug.WriteLine($"[TargetInfoViewModel] 读取目标数据库失败：{ex}");
+        }
+    }
+
+    /// <summary>
+    /// 判断当前选中目标是否仍在当前筛选结果中。
+    /// </summary>
+    private bool IsSelectedTargetInCurrentFilter()
+    {
+        if (SelectedTarget == null)
+        {
+            return false;
+        }
+
+        return FilterTargetByCategory(SelectedTarget);
+    }
+
+    /// <summary>
+    /// 目标类型筛选谓词，供 ICollectionView 调用。
+    /// </summary>
+    private bool FilterTargetByCategory(object item)
+    {
+        if (item is not TargetInfoItem target)
+        {
+            return false;
+        }
+
+        return SelectedTargetCategory == AllTargetCategory ||
+               SelectedTargetCategory == target.Category;
+    }
+
+    /// <summary>
+    /// 根据当前目标集合重建类型筛选下拉列表。
+    /// </summary>
+    private void RebuildTargetCategories(bool refreshFilteredTargets = true)
+    {
+        string selectedCategory = string.IsNullOrWhiteSpace(SelectedTargetCategory)
+            ? AllTargetCategory
+            : SelectedTargetCategory;
+
+        TargetCategories.Clear();
+        TargetCategories.Add(AllTargetCategory);
+
+        foreach (string category in Targets
+                     .Select(target => target.Category.Trim())
+                     .Where(category => !string.IsNullOrWhiteSpace(category))
+                     .Distinct())
+        {
+            TargetCategories.Add(category);
+        }
+
+        // 如果原类型已经不存在，自动回退到“全部类型”。
+        SelectedTargetCategory = TargetCategories.Contains(selectedCategory)
+            ? selectedCategory
+            : AllTargetCategory;
+
+        if (refreshFilteredTargets)
         {
             FilteredTargets.Refresh();
-
-            if (!IsSelectedTargetInCurrentFilter())
-            {
-                SelectedTarget = FilteredTargets.Cast<TargetInfoItem>().FirstOrDefault();
-            }
         }
+    }
 
-        private void LoadTargetsFromRepository()
+    /// <summary>
+    /// 校验目标名称、类型和唯一标识。
+    /// </summary>
+    private bool ValidateTarget(TargetInfoItem target, TargetInfoItem? except)
+    {
+        if (string.IsNullOrWhiteSpace(target.Name))
         {
-            Targets.Clear();
-
-            try
-            {
-                IReadOnlyList<TargetInfoItem> storedTargets = _targetInfoRepository.LoadTargets();
-                foreach (TargetInfoItem target in storedTargets)
-                {
-                    EnsureTargetStructureTree(target);
-                    Targets.Add(target);
-                }
-
-                _targetLoadStatusText = Targets.Count == 0
-                    ? "数据库中暂无目标信息"
-                    : $"已从数据库读取 {Targets.Count} 个目标";
-                StatusText = _targetLoadStatusText;
-            }
-            catch (Exception ex)
-            {
-                _targetLoadStatusText = $"读取目标数据库失败：{ex.Message}";
-                StatusText = _targetLoadStatusText;
-                Debug.WriteLine($"[TargetInfoViewModel] 读取目标数据库失败：{ex}");
-            }
+            StatusText = "请输入目标名称";
+            return false;
         }
 
-        private bool IsSelectedTargetInCurrentFilter()
+        if (string.IsNullOrWhiteSpace(target.Category))
         {
-            if (SelectedTarget == null)
-            {
-                return false;
-            }
-
-            return FilterTargetByCategory(SelectedTarget);
+            StatusText = "请输入目标种类";
+            return false;
         }
 
-        private bool FilterTargetByCategory(object item)
+        if (string.IsNullOrWhiteSpace(target.Code))
         {
-            if (item is not TargetInfoItem target)
-            {
-                return false;
-            }
-
-            return SelectedTargetCategory == AllTargetCategory ||
-                   SelectedTargetCategory == target.Category;
+            target.Code = CreateUniqueTargetCode();
         }
 
-        private void RebuildTargetCategories(bool refreshFilteredTargets = true)
+        bool codeUsed = Targets.Any(existingTarget =>
+            !ReferenceEquals(existingTarget, except) &&
+            string.Equals(existingTarget.Code, target.Code, StringComparison.Ordinal));
+
+        if (codeUsed)
         {
-            string selectedCategory = string.IsNullOrWhiteSpace(SelectedTargetCategory)
-                ? AllTargetCategory
-                : SelectedTargetCategory;
-
-            TargetCategories.Clear();
-            TargetCategories.Add(AllTargetCategory);
-
-            foreach (string category in Targets
-                         .Select(target => target.Category.Trim())
-                         .Where(category => !string.IsNullOrWhiteSpace(category))
-                         .Distinct())
-            {
-                TargetCategories.Add(category);
-            }
-
-            SelectedTargetCategory = TargetCategories.Contains(selectedCategory)
-                ? selectedCategory
-                : AllTargetCategory;
-
-            if (refreshFilteredTargets)
-            {
-                FilteredTargets.Refresh();
-            }
+            StatusText = $"目标唯一标识已存在：{target.Code}";
+            return false;
         }
 
-        private bool ValidateTarget(TargetInfoItem target, TargetInfoItem? except)
+        return true;
+    }
+
+    /// <summary>
+    /// 去除目标字符串字段前后的空白字符。
+    /// </summary>
+    private static void NormalizeTarget(TargetInfoItem target)
+    {
+        target.Name = target.Name.Trim();
+        target.Category = target.Category.Trim();
+        target.Description = target.Description.Trim();
+        target.Code = target.Code.Trim();
+    }
+
+    /// <summary>
+    /// 确保目标模型存在结构树根节点。
+    /// </summary>
+    /// <remarks>
+    /// 数据库层只关心目标、系统和部件的父子关系；WPF TreeView 需要额外的 TargetStructureTreeNode 包装。
+    /// </remarks>
+    private static void EnsureTargetStructureTree(TargetInfoItem target)
+    {
+        if (target.StructureTreeNodes.Count > 0)
         {
-            if (string.IsNullOrWhiteSpace(target.Name))
-            {
-                StatusText = "请输入目标名称";
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(target.Category))
-            {
-                StatusText = "请输入目标种类";
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(target.Code))
-            {
-                target.Code = CreateUniqueTargetCode();
-            }
-
-            bool codeUsed = Targets.Any(existingTarget =>
-                !ReferenceEquals(existingTarget, except) &&
-                string.Equals(existingTarget.Code, target.Code, StringComparison.Ordinal));
-
-            if (codeUsed)
-            {
-                StatusText = $"目标唯一标识已存在：{target.Code}";
-                return false;
-            }
-
-            return true;
+            return;
         }
 
-        private static void NormalizeTarget(TargetInfoItem target)
+        TargetStructureTreeNode root = TargetStructureTreeNode.ForTarget(target);
+        foreach (TargetSystemInfoItem system in target.Systems)
         {
-            target.Name = target.Name.Trim();
-            target.Category = target.Category.Trim();
-            target.Description = target.Description.Trim();
-            target.Code = target.Code.Trim();
+            root.Children.Add(CreateSystemNode(system));
         }
 
-        private static void EnsureTargetStructureTree(TargetInfoItem target)
-        {
-            if (target.StructureTreeNodes.Count > 0)
-            {
-                return;
-            }
-
-            TargetStructureTreeNode root = TargetStructureTreeNode.ForTarget(target);
-            foreach (TargetSystemInfoItem system in target.Systems)
-            {
-                root.Children.Add(CreateSystemNode(system));
-            }
-
-            target.StructureTreeNodes.Add(root);
-        }
+        target.StructureTreeNodes.Add(root);
     }
 }

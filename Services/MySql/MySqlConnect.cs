@@ -1,6 +1,8 @@
 using System.Data;
 using MySql.Data.MySqlClient;
 
+namespace CombatSimulation.Services.MySql;
+
 /// <summary>
 /// 基础的 MySQL 连接管理类。
 /// 不依赖 UnityEngine 或 WPF，可在 Unity 与 WPF 中共用。

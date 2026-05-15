@@ -2,114 +2,113 @@ using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace CombatSimulation.ViewModels
+namespace CombatSimulation.ViewModels;
+
+/// <summary>
+/// 目标系统添加/修改弹窗 ViewModel。
+/// </summary>
+public sealed partial class TargetSystemEditDialogViewModel : ObservableObject
 {
-    /// <summary>
-    /// 目标系统添加/修改弹窗 ViewModel。
-    /// </summary>
-    public sealed partial class TargetSystemEditDialogViewModel : ObservableObject
+    private readonly string _targetCode;
+    private readonly string _parentSystemCode;
+    private readonly bool _isTopSystem;
+
+    public TargetSystemEditDialogViewModel(TargetSystemInfoItem system, bool isEditMode)
     {
-        private readonly string _targetCode;
-        private readonly string _parentSystemCode;
-        private readonly bool _isTopSystem;
-
-        public TargetSystemEditDialogViewModel(TargetSystemInfoItem system, bool isEditMode)
+        EditedSystem = CloneSystem(system);
+        if (string.IsNullOrWhiteSpace(EditedSystem.SystemCode))
         {
-            EditedSystem = CloneSystem(system);
-            if (string.IsNullOrWhiteSpace(EditedSystem.SystemCode))
-            {
-                EditedSystem.SystemCode = Guid.NewGuid().ToString("N");
-            }
-
-            _targetCode = EditedSystem.TargetCode;
-            _parentSystemCode = EditedSystem.ParentSystemCode;
-            _isTopSystem = EditedSystem.IsTopSystem;
-
-            DialogTitle = isEditMode ? "修改目标系统信息" : "添加目标子系统";
-            SystemName = EditedSystem.SystemName;
-            SystemDescription = EditedSystem.SystemDescription;
-            ParentSystemDisplayText = FormatParentSystemCode(_parentSystemCode);
-            IsTopSystemDisplayText = _isTopSystem ? "是" : "否";
+            EditedSystem.SystemCode = Guid.NewGuid().ToString("N");
         }
 
-        public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+        _targetCode = EditedSystem.TargetCode;
+        _parentSystemCode = EditedSystem.ParentSystemCode;
+        _isTopSystem = EditedSystem.IsTopSystem;
 
-        public TargetSystemInfoItem EditedSystem { get; private set; }
+        DialogTitle = isEditMode ? "修改目标系统信息" : "添加目标子系统";
+        SystemName = EditedSystem.SystemName;
+        SystemDescription = EditedSystem.SystemDescription;
+        ParentSystemDisplayText = FormatParentSystemCode(_parentSystemCode);
+        IsTopSystemDisplayText = _isTopSystem ? "是" : "否";
+    }
 
-        [ObservableProperty]
-        private string _dialogTitle = "目标系统信息设置";
+    public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
 
-        [ObservableProperty]
-        private string _systemName = string.Empty;
+    public TargetSystemInfoItem EditedSystem { get; private set; }
 
-        [ObservableProperty]
-        private string _systemDescription = string.Empty;
+    [ObservableProperty]
+    private string _dialogTitle = "目标系统信息设置";
 
-        [ObservableProperty]
-        private string _parentSystemDisplayText = string.Empty;
+    [ObservableProperty]
+    private string _systemName = string.Empty;
 
-        [ObservableProperty]
-        private string _isTopSystemDisplayText = string.Empty;
+    [ObservableProperty]
+    private string _systemDescription = string.Empty;
 
-        [ObservableProperty]
-        private string _validationMessage = string.Empty;
+    [ObservableProperty]
+    private string _parentSystemDisplayText = string.Empty;
 
-        /// <summary>
-        /// 保存系统输入内容，并请求窗口按确认结果关闭。
-        /// </summary>
-        [RelayCommand]
-        private void Save()
+    [ObservableProperty]
+    private string _isTopSystemDisplayText = string.Empty;
+
+    [ObservableProperty]
+    private string _validationMessage = string.Empty;
+
+    /// <summary>
+    /// 保存系统输入内容，并请求窗口按确认结果关闭。
+    /// </summary>
+    [RelayCommand]
+    private void Save()
+    {
+        string systemName = SystemName.Trim();
+
+        if (string.IsNullOrWhiteSpace(systemName))
         {
-            string systemName = SystemName.Trim();
-
-            if (string.IsNullOrWhiteSpace(systemName))
-            {
-                ValidationMessage = "请输入系统名称。";
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(EditedSystem.SystemCode))
-            {
-                EditedSystem.SystemCode = Guid.NewGuid().ToString("N");
-            }
-
-            EditedSystem.SystemName = systemName;
-            EditedSystem.SystemDescription = SystemDescription.Trim();
-            EditedSystem.ParentSystemCode = _parentSystemCode;
-            EditedSystem.IsTopSystem = _isTopSystem;
-            EditedSystem.TargetCode = _targetCode;
-            ValidationMessage = string.Empty;
-
-            CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: true));
+            ValidationMessage = "请输入系统名称。";
+            return;
         }
 
-        /// <summary>
-        /// 取消编辑，并请求窗口按取消结果关闭。
-        /// </summary>
-        [RelayCommand]
-        private void Cancel()
+        if (string.IsNullOrWhiteSpace(EditedSystem.SystemCode))
         {
-            CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: false));
+            EditedSystem.SystemCode = Guid.NewGuid().ToString("N");
         }
 
-        private static string FormatParentSystemCode(string parentSystemCode)
-        {
-            return string.IsNullOrWhiteSpace(parentSystemCode) || parentSystemCode == "-1"
-                ? "无（顶系统）"
-                : parentSystemCode;
-        }
+        EditedSystem.SystemName = systemName;
+        EditedSystem.SystemDescription = SystemDescription.Trim();
+        EditedSystem.ParentSystemCode = _parentSystemCode;
+        EditedSystem.IsTopSystem = _isTopSystem;
+        EditedSystem.TargetCode = _targetCode;
+        ValidationMessage = string.Empty;
 
-        private static TargetSystemInfoItem CloneSystem(TargetSystemInfoItem source)
+        CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: true));
+    }
+
+    /// <summary>
+    /// 取消编辑，并请求窗口按取消结果关闭。
+    /// </summary>
+    [RelayCommand]
+    private void Cancel()
+    {
+        CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: false));
+    }
+
+    private static string FormatParentSystemCode(string parentSystemCode)
+    {
+        return string.IsNullOrWhiteSpace(parentSystemCode) || parentSystemCode == "-1"
+            ? "无（顶系统）"
+            : parentSystemCode;
+    }
+
+    private static TargetSystemInfoItem CloneSystem(TargetSystemInfoItem source)
+    {
+        return new TargetSystemInfoItem
         {
-            return new TargetSystemInfoItem
-            {
-                SystemCode = source.SystemCode,
-                SystemName = source.SystemName,
-                SystemDescription = source.SystemDescription,
-                IsTopSystem = source.IsTopSystem,
-                ParentSystemCode = source.ParentSystemCode,
-                TargetCode = source.TargetCode
-            };
-        }
+            SystemCode = source.SystemCode,
+            SystemName = source.SystemName,
+            SystemDescription = source.SystemDescription,
+            IsTopSystem = source.IsTopSystem,
+            ParentSystemCode = source.ParentSystemCode,
+            TargetCode = source.TargetCode
+        };
     }
 }

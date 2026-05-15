@@ -414,7 +414,7 @@
                                     </Grid>
                                 </UniformGrid>
 
-                                <TextBlock Text="姿态角度" Style="{StaticResource SectionTitleTextStyle}" />
+                                <TextBlock Text="旋转角度" Style="{StaticResource SectionTitleTextStyle}" />
                                 <UniformGrid Columns="3">
                                     <Grid Margin="0,0,10,10">
                                         <Grid.ColumnDefinitions>

@@ -16,11 +16,11 @@ public sealed class LoadAndWriteDb : IDisposable
 
     /// <summary>
     /// 默认构造函数。
-    /// 优先读取环境变量 TARGET_MYSQL_CONNECTION_STRING，其次读取程序目录 target_mysql.json。
+    /// 仅从程序运行目录下的 target_mysql.json 读取连接信息。
     /// </summary>
     public LoadAndWriteDb()
         : this(MySQLConnectionInfo.TryBuildDefaultConnectionString()
-            ?? throw new InvalidOperationException("未找到 MySQL 连接信息。请设置 TARGET_MYSQL_CONNECTION_STRING，或在程序目录放置 target_mysql.json。"))
+            ?? throw new InvalidOperationException("未找到 MySQL 连接信息。请在程序运行目录放置 target_mysql.json。"))
     {
     }
 
@@ -47,11 +47,21 @@ public sealed class LoadAndWriteDb : IDisposable
     }
 
     /// <summary>
+    /// 创建某个类型对应的数据表。
+    /// MySqlCommand_TJ.CreateTable 内部使用 CREATE TABLE IF NOT EXISTS，因此表已存在时不会重复创建。
+    /// </summary>
+    public void CreateTable<T>() where T : MySQLClassBaseClass
+    {
+        mySqlCommand_TJ.CreateTable<T>();
+    }
+
+    /// <summary>
     /// 判断某个表是否存在，不存在则添加，存在则跳过。
+    /// 保留该方法名是为了兼容原 Unity 端调用；新代码建议直接使用 CreateTable。
     /// </summary>
     public void IsTableExist<T>() where T : MySQLClassBaseClass
     {
-        mySqlCommand_TJ.CreateTable<T>();
+        CreateTable<T>();
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 using CombatSimulation.MySQLClassBase;
 
+namespace CombatSimulation.Services.MySql;
+
 /// <summary>
 /// 用于从 MySQL 数据库中获取目标系统信息的数据结构。
 /// </summary>

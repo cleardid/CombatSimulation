@@ -1,8 +1,15 @@
-using CombatSimulation.MySQLClassBase;
+﻿using CombatSimulation.MySQLClassBase;
+
+namespace CombatSimulation.Services.MySql;
 
 /// <summary>
 /// 用于从 MySQL 数据库中获取目标部件信息的数据结构。
 /// </summary>
+/// <remarks>
+/// t_p_EquParam1 ~ t_p_EquParam24 是部件几何参数字段。
+/// 非六面异形体中，1~3 表示中心坐标，4~6 表示尺寸参数，7~9 表示旋转角度；
+/// 六面异形体中，1~24 依次表示八个点的 XYZ 坐标。
+/// </remarks>
 public class Target_Part_Info_By_MySQL : MySQLClassBaseClass, ICloneable
 {
     // 重写表名。

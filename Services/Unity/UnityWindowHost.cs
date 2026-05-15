@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -24,8 +24,10 @@ namespace CombatSimulation.Services.Unity
         private const int FastApplyCount = 40;
 
         private const int GwlStyle = -16;
+        private const int GwlExStyle = -20;
         private const long WsChild = 0x40000000L;
         private const long WsVisible = 0x10000000L;
+        private const long WsDisabled = 0x08000000L;
         private const long WsPopup = unchecked((long)0x80000000);
         private const long WsCaption = 0x00C00000L;
         private const long WsThickFrame = 0x00040000L;
@@ -33,6 +35,7 @@ namespace CombatSimulation.Services.Unity
         private const long WsMaximize = 0x01000000L;
         private const long WsClipChildren = 0x02000000L;
         private const long WsClipSiblings = 0x04000000L;
+        private const long WsExNoActivate = 0x08000000L;
 
         private static readonly nint HwndTop = 0;
         private const uint SwpNoSize = 0x0001;
@@ -43,8 +46,7 @@ namespace CombatSimulation.Services.Unity
         private const uint SwpShowWindow = 0x0040;
         private const uint SwpHideWindow = 0x0080;
         private const int SwHide = 0;
-        private const int SwShowNoActivate = 4;
-        private const int SwRestore = 9;
+        private const int SwShow = 5;
         private const uint GwOwner = 4;
 
         private readonly SemaphoreSlim _windowLock = new(1, 1);
@@ -512,9 +514,11 @@ namespace CombatSimulation.Services.Unity
                 return;
             }
 
+            EnsureInteractiveWindowStyle(unityHwnd);
+
             long style = GetWindowStyle(unityHwnd).ToInt64();
             long childStyle = (style | WsChild | WsClipChildren | WsClipSiblings) &
-                              ~(WsPopup | WsCaption | WsThickFrame | WsMinimize | WsMaximize);
+                              ~(WsPopup | WsCaption | WsThickFrame | WsMinimize | WsMaximize | WsDisabled);
 
             if (style != childStyle)
             {
@@ -535,7 +539,7 @@ namespace CombatSimulation.Services.Unity
                 0,
                 0,
                 0,
-                SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+                SwpNoMove | SwpNoSize | SwpNoZOrder | SwpFrameChanged);
         }
 
         private static void GetEffectiveHostBounds(HostStateSnapshot snapshot, out int x, out int y, out int width, out int height)
@@ -573,16 +577,7 @@ namespace CombatSimulation.Services.Unity
             // 如果先 ShowWindow，再 MoveWindow，Unity 会短暂显示在默认父窗口的 (0,0) 位置。
             MoveWindow(unityHwnd, x, y, effectiveWidth, effectiveHeight, false);
 
-            SetWindowPos(
-                unityHwnd,
-                HwndTop,
-                x,
-                y,
-                effectiveWidth,
-                effectiveHeight,
-                SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
-
-            ShowWindow(unityHwnd, SwShowNoActivate);
+            EnsureInteractiveWindowStyle(unityHwnd);
 
             SetWindowPos(
                 unityHwnd,
@@ -591,10 +586,66 @@ namespace CombatSimulation.Services.Unity
                 y,
                 effectiveWidth,
                 effectiveHeight,
-                SwpNoZOrder | SwpNoActivate | SwpFrameChanged | SwpShowWindow);
+                SwpNoZOrder | SwpFrameChanged);
+
+            ShowWindow(unityHwnd, SwShow);
+
+            SetWindowPos(
+                unityHwnd,
+                HwndTop,
+                x,
+                y,
+                effectiveWidth,
+                effectiveHeight,
+                SwpNoZOrder | SwpFrameChanged | SwpShowWindow);
 
             MoveWindow(unityHwnd, x, y, effectiveWidth, effectiveHeight, true);
             UpdateWindow(unityHwnd);
+            FocusUnityWindowCore(unityHwnd);
+        }
+
+
+        /// <summary>
+        /// 清理 Unity 窗口的禁用/禁止激活样式，确保嵌入后仍能接收鼠标点击。
+        /// </summary>
+        private static void EnsureInteractiveWindowStyle(nint unityHwnd)
+        {
+            if (unityHwnd == 0 || !IsWindow(unityHwnd))
+            {
+                return;
+            }
+
+            EnableWindow(unityHwnd, true);
+
+            long style = GetWindowStyle(unityHwnd).ToInt64();
+            long enabledStyle = style & ~WsDisabled;
+            if (style != enabledStyle)
+            {
+                SetWindowStyle(unityHwnd, new nint(enabledStyle));
+            }
+
+            long extendedStyle = GetWindowExtendedStyle(unityHwnd).ToInt64();
+            long activatableExtendedStyle = extendedStyle & ~WsExNoActivate;
+            if (extendedStyle != activatableExtendedStyle)
+            {
+                SetWindowExtendedStyle(unityHwnd, new nint(activatableExtendedStyle));
+            }
+        }
+
+        /// <summary>
+        /// 显示后主动把输入焦点交给 Unity 子窗口。
+        /// Unity 内部 UI 按钮依赖窗口焦点处理鼠标事件，长期使用 SW_SHOWNA/SWP_NOACTIVATE 会导致画面可见但按钮无响应。
+        /// </summary>
+        private static void FocusUnityWindowCore(nint unityHwnd)
+        {
+            if (unityHwnd == 0 || !IsWindow(unityHwnd))
+            {
+                return;
+            }
+
+            BringWindowToTop(unityHwnd);
+            SetActiveWindow(unityHwnd);
+            SetFocus(unityHwnd);
         }
 
         private static void HideWindowCore(nint unityHwnd)
@@ -677,6 +728,20 @@ namespace CombatSimulation.Services.Unity
                 : SetWindowLong32(hWnd, GwlStyle, style);
         }
 
+        private static nint GetWindowExtendedStyle(nint hWnd)
+        {
+            return IntPtr.Size == 8
+                ? GetWindowLongPtr64(hWnd, GwlExStyle)
+                : GetWindowLong32(hWnd, GwlExStyle);
+        }
+
+        private static nint SetWindowExtendedStyle(nint hWnd, nint style)
+        {
+            return IntPtr.Size == 8
+                ? SetWindowLongPtr64(hWnd, GwlExStyle, style)
+                : SetWindowLong32(hWnd, GwlExStyle, style);
+        }
+
         private void Log(string message)
         {
             LogReceived?.Invoke(this, message);
@@ -736,6 +801,18 @@ namespace CombatSimulation.Services.Unity
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool EnableWindow(nint hWnd, bool enable);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool BringWindowToTop(nint hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern nint SetActiveWindow(nint hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern nint SetFocus(nint hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool IsWindow(nint hWnd);

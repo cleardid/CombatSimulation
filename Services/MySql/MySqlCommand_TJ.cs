@@ -6,6 +6,8 @@ using CombatSimulation.MySQLClassBase;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 
+namespace CombatSimulation.Services.MySql;
+
 /// <summary>
 /// 数据库操作类，用于执行 MySQL 数据库的增删改查操作。
 /// 该实现保留原有泛型反射模型，但移除了 Unity 依赖，并修正了字符串主键建表、插入与更新逻辑。

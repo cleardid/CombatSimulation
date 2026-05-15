@@ -1,0 +1,153 @@
+﻿<Window x:Class="CombatSimulation.Views.DamageTreeLeafNodeEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:CombatSimulation.Models"
+        Title="{Binding DialogTitle}"
+        Width="760"
+        Height="620"
+        MinWidth="760"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Window.Background>
+        <ImageBrush ImageSource="pack://application:,,,/Resource/pop.png" Stretch="UniformToFill" />
+    </Window.Background>
+
+    <Window.Resources>
+        <Style x:Key="DialogLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+        </Style>
+        <Style x:Key="DialogColonStyle" TargetType="TextBlock">
+            <Setter Property="Text" Value=":" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DialogTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#CC0F172A" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+        <Style x:Key="DialogDescriptionTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource DialogTextBoxStyle}">
+            <Setter Property="Height" Value="Auto" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        </Style>
+        <Style x:Key="DialogButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="112" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="#F6E84A" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="14,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" /></Border></ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PartSelectTreeItemStyle" TargetType="TreeViewItem">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+            <Setter Property="Foreground" Value="#EAF6FF" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+
+        <HierarchicalDataTemplate DataType="{x:Type models:TargetStructureTreeNode}" ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal" Margin="2,1">
+                <TextBlock Text="{Binding NodeType}" Foreground="#8FB7FF" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding Name}" Foreground="#EAF6FF" />
+            </StackPanel>
+        </HierarchicalDataTemplate>
+    </Window.Resources>
+
+    <Border Margin="22" Padding="22" Background="#CC020617" BorderBrush="#334155" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="{Binding DialogTitle}" Foreground="#F8FAFC" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,18" />
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" />
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="#B90F172A" BorderBrush="#475569" BorderThickness="1" Padding="10">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="目标结构信息（请选择底层部件）" Foreground="#F8FAFC" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TreeView ItemsSource="{Binding TargetStructureRoots}"
+                                  SelectedItemChanged="OnTargetStructureSelectedItemChanged"
+                                  ItemContainerStyle="{StaticResource PartSelectTreeItemStyle}"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                    </DockPanel>
+                </Border>
+
+                <Grid Grid.Column="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="104" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="42" />
+                        <RowDefinition Height="42" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="节点名称" Style="{StaticResource DialogLabelStyle}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                    <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding NodeName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="绑定部件" Style="{StaticResource DialogLabelStyle}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                    <Border Grid.Row="1" Grid.Column="2" Height="30" Background="#660F172A" BorderBrush="#475569" BorderThickness="1" Padding="6,0">
+                        <TextBlock Text="{Binding SelectedPartDisplayText}" Foreground="#CBD5E1" FontSize="15" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </Border>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="节点描述" Style="{StaticResource DialogLabelStyle}" VerticalAlignment="Top" Margin="0,6,4,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource DialogColonStyle}" VerticalAlignment="Top" Margin="0,6,0,0" />
+                    <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding NodeDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogDescriptionTextBoxStyle}" />
+                </Grid>
+            </Grid>
+
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,22,0,0">
+                <TextBlock Text="{Binding ValidationMessage}" Foreground="#FF6B6B" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="保存并退出" Style="{StaticResource DialogButtonStyle}" Command="{Binding SaveCommand}" />
+                    <Button Content="取消" Style="{StaticResource DialogButtonStyle}" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

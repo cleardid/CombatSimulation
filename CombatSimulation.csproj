@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -25,6 +25,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="MySql.Data" Version="9.7.0" />
     <Resource Include="Resource\*.png" />
+    <None Include="target_mysql.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('target_mysql.json')" />
   </ItemGroup>
 
 </Project>

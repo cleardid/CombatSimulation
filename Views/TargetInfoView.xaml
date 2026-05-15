@@ -55,7 +55,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧：目标军事列表 -->
+        <!-- 左侧：目标列表 -->
         <Border Grid.Column="0"
                 Style="{DynamicResource CardStyle}"
                 Margin="0,0,16,0">
@@ -102,6 +102,7 @@
                     </StackPanel>
                 </Border>
 
+
                 <ListBox ItemsSource="{Binding FilteredTargets}"
                          SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"
                          SelectionMode="Single"
@@ -112,102 +113,7 @@
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.PanningMode="VerticalFirst"
                          ItemContainerStyle="{DynamicResource TargetItemListBoxItemStyle}">
-                    <ListBox.Resources>
-                        <!-- 目标列表本地滚动条样式：避免依赖外层资源字典，防止 StaticResource 查找失败 -->
-                        <ControlTemplate x:Key="TargetListTransparentScrollRepeatButtonTemplate" TargetType="RepeatButton">
-                            <Border Background="Transparent" />
-                        </ControlTemplate>
-
-                        <Style x:Key="TargetListTransparentScrollRepeatButtonStyle" TargetType="RepeatButton">
-                            <Setter Property="Focusable" Value="False" />
-                            <Setter Property="IsTabStop" Value="False" />
-                            <Setter Property="Template" Value="{StaticResource TargetListTransparentScrollRepeatButtonTemplate}" />
-                        </Style>
-
-                        <Style x:Key="TargetListLocalScrollThumbStyle" TargetType="Thumb">
-                            <Setter Property="MinHeight" Value="48" />
-                            <Setter Property="Width" Value="6" />
-                            <Setter Property="Background" Value="#8894A3B8" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="Thumb">
-                                        <Border x:Name="ThumbBorder"
-                                                Width="{TemplateBinding Width}"
-                                                MinHeight="{TemplateBinding MinHeight}"
-                                                Background="{TemplateBinding Background}"
-                                                CornerRadius="4"
-                                                HorizontalAlignment="Center" />
-
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#CC38BDF8" />
-                                                <Setter TargetName="ThumbBorder" Property="Width" Value="8" />
-                                            </Trigger>
-
-                                            <Trigger Property="IsDragging" Value="True">
-                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#FF38BDF8" />
-                                                <Setter TargetName="ThumbBorder" Property="Width" Value="8" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-
-                        <Style TargetType="ScrollBar">
-                            <Setter Property="Width" Value="12" />
-                            <Setter Property="MinWidth" Value="12" />
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ScrollBar">
-                                        <Grid x:Name="Root"
-                                              Width="{TemplateBinding Width}"
-                                              Background="Transparent"
-                                              SnapsToDevicePixels="True">
-
-                                            <Border x:Name="TrackBackground"
-                                                    Width="6"
-                                                    Margin="3,0"
-                                                    Background="#331E293B"
-                                                    CornerRadius="4"
-                                                    HorizontalAlignment="Center" />
-
-                                            <Track x:Name="PART_Track"
-                                                   Margin="0,3"
-                                                   IsDirectionReversed="True">
-                                                <Track.DecreaseRepeatButton>
-                                                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}"
-                                                                  CommandTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
-                                                                  Style="{StaticResource TargetListTransparentScrollRepeatButtonStyle}" />
-                                                </Track.DecreaseRepeatButton>
-
-                                                <Track.Thumb>
-                                                    <Thumb Style="{StaticResource TargetListLocalScrollThumbStyle}" />
-                                                </Track.Thumb>
-
-                                                <Track.IncreaseRepeatButton>
-                                                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}"
-                                                                  CommandTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
-                                                                  Style="{StaticResource TargetListTransparentScrollRepeatButtonStyle}" />
-                                                </Track.IncreaseRepeatButton>
-                                            </Track>
-                                        </Grid>
-
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="TrackBackground" Property="Background" Value="#5533455F" />
-                                            </Trigger>
-
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="Root" Property="Opacity" Value="0.35" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListBox.Resources>
+                    <!-- 滚动条样式统一由 App.xaml 的 TargetListScrollBarStyle 提供。 -->
 
                     <ListBox.ItemTemplate>
                         <DataTemplate>

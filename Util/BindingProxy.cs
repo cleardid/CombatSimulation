@@ -1,27 +1,35 @@
 using System.Windows;
 
-namespace CombatSimulation.Util
+namespace CombatSimulation.Util;
+
+/// <summary>
+/// 让 ContextMenu、DataTemplate 等不在视觉树中的元素也能稳定绑定到父级 DataContext。
+/// </summary>
+public sealed class BindingProxy : Freezable
 {
     /// <summary>
-    /// 让 ContextMenu、DataTemplate 等不在视觉树中的元素也能稳定绑定到父级 DataContext。
+    /// 代理保存的 DataContext 依赖属性。
     /// </summary>
-    public sealed class BindingProxy : Freezable
+    public static readonly DependencyProperty DataProperty = DependencyProperty.Register(
+        nameof(Data),
+        typeof(object),
+        typeof(BindingProxy),
+        new UIPropertyMetadata(null));
+
+    /// <summary>
+    /// 需要暴露给非视觉树元素的绑定源。
+    /// </summary>
+    public object? Data
     {
-        public static readonly DependencyProperty DataProperty = DependencyProperty.Register(
-            nameof(Data),
-            typeof(object),
-            typeof(BindingProxy),
-            new UIPropertyMetadata(null));
+        get => GetValue(DataProperty);
+        set => SetValue(DataProperty, value);
+    }
 
-        public object? Data
-        {
-            get => GetValue(DataProperty);
-            set => SetValue(DataProperty, value);
-        }
-
-        protected override Freezable CreateInstanceCore()
-        {
-            return new BindingProxy();
-        }
+    /// <summary>
+    /// WPF Freezable 必需的实例创建方法。
+    /// </summary>
+    protected override Freezable CreateInstanceCore()
+    {
+        return new BindingProxy();
     }
 }

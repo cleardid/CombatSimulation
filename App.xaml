@@ -4,6 +4,108 @@
              xmlns:local="clr-namespace:CombatSimulation"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <ResourceDictionary />
+        <ResourceDictionary>
+            <!--
+                全局滚动条样式。
+                目标列表、结构树、详情区域和弹窗中的 ScrollViewer/ListBox/TreeView 都会默认使用该样式，
+                以避免不同界面混用系统默认滚动条和目标列表滚动条。
+            -->
+            <ControlTemplate x:Key="GlobalTransparentScrollRepeatButtonTemplate" TargetType="RepeatButton">
+                <Border Background="Transparent" />
+            </ControlTemplate>
+
+            <Style x:Key="GlobalTransparentScrollRepeatButtonStyle" TargetType="RepeatButton">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="IsTabStop" Value="False" />
+                <Setter Property="Template" Value="{StaticResource GlobalTransparentScrollRepeatButtonTemplate}" />
+            </Style>
+
+            <Style x:Key="GlobalTargetListScrollThumbStyle" TargetType="Thumb">
+                <Setter Property="MinHeight" Value="48" />
+                <Setter Property="Width" Value="6" />
+                <Setter Property="Background" Value="#8894A3B8" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border x:Name="ThumbBorder"
+                                    Width="{TemplateBinding Width}"
+                                    MinHeight="{TemplateBinding MinHeight}"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="4"
+                                    HorizontalAlignment="Center" />
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ThumbBorder" Property="Background" Value="#CC38BDF8" />
+                                    <Setter TargetName="ThumbBorder" Property="Width" Value="8" />
+                                </Trigger>
+
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="ThumbBorder" Property="Background" Value="#FF38BDF8" />
+                                    <Setter TargetName="ThumbBorder" Property="Width" Value="8" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="TargetListScrollBarStyle" TargetType="ScrollBar">
+                <Setter Property="Width" Value="12" />
+                <Setter Property="MinWidth" Value="12" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid x:Name="Root"
+                                  Width="{TemplateBinding Width}"
+                                  Background="Transparent"
+                                  SnapsToDevicePixels="True">
+
+                                <Border x:Name="TrackBackground"
+                                        Width="6"
+                                        Margin="3,0"
+                                        Background="#331E293B"
+                                        CornerRadius="4"
+                                        HorizontalAlignment="Center" />
+
+                                <Track x:Name="PART_Track"
+                                       Margin="0,3"
+                                       IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}"
+                                                      CommandTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                                      Style="{StaticResource GlobalTransparentScrollRepeatButtonStyle}" />
+                                    </Track.DecreaseRepeatButton>
+
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource GlobalTargetListScrollThumbStyle}" />
+                                    </Track.Thumb>
+
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}"
+                                                      CommandTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                                      Style="{StaticResource GlobalTransparentScrollRepeatButtonStyle}" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="TrackBackground" Property="Background" Value="#5533455F" />
+                                </Trigger>
+
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.35" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 无 Key 的隐式样式会应用到整个程序中所有未显式重写样式的 ScrollBar。 -->
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource TargetListScrollBarStyle}" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
