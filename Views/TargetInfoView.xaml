@@ -10,6 +10,45 @@
         <viewModels:TargetInfoViewModel />
     </UserControl.DataContext>
 
+    <UserControl.Resources>
+        <Style x:Key="TargetTextActionButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="76" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#F6E84A" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#FF3B30" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Foreground" Value="#FF3B30" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#64748B" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="300" />
@@ -22,11 +61,25 @@
                 Margin="0,0,16,0">
 
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top"
-                           Text="典型目标列表"
-                           FontSize="20"
-                           FontWeight="Bold"
-                           Margin="0,0,0,12" />
+                <StackPanel DockPanel.Dock="Top"
+                            Margin="0,0,0,12">
+                    <TextBlock Text="典型目标列表"
+                               FontSize="20"
+                               FontWeight="Bold" />
+
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,10,0,0">
+                        <Button Content="添加目标"
+                                Style="{StaticResource TargetTextActionButtonStyle}"
+                                Command="{Binding RequestAddTargetCommand}" />
+                        <Button Content="修改目标"
+                                Style="{StaticResource TargetTextActionButtonStyle}"
+                                Command="{Binding RequestModifyTargetCommand}" />
+                        <Button Content="删除目标"
+                                Style="{StaticResource TargetTextActionButtonStyle}"
+                                Command="{Binding RequestDeleteTargetCommand}" />
+                    </StackPanel>
+                </StackPanel>
 
                 <Border DockPanel.Dock="Top"
                         Margin="0,0,0,18"

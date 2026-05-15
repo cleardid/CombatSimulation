@@ -1,0 +1,488 @@
+﻿<Window x:Class="CombatSimulation.Views.TargetPartEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding DialogTitle}"
+        Width="1060"
+        Height="1000"
+        MinWidth="960"
+        MinHeight="960"
+        WindowStartupLocation="CenterOwner">
+    <Window.Background>
+        <ImageBrush ImageSource="pack://application:,,,/Resource/pop.png"
+                    Stretch="UniformToFill"
+                    AlignmentX="Center"
+                    AlignmentY="Center" />
+    </Window.Background>
+
+    <Window.Resources>
+        <Style x:Key="DialogLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+
+        <Style x:Key="DialogColonStyle" TargetType="TextBlock">
+            <Setter Property="Text" Value=":" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SectionTitleTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,10,0,10" />
+        </Style>
+
+        <Style x:Key="DialogTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="CaretBrush" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#CC0F172A" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="6,0" />
+        </Style>
+
+        <Style x:Key="NumericTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource DialogTextBoxStyle}">
+            <Setter Property="TextAlignment" Value="Right" />
+        </Style>
+
+        <Style x:Key="DialogComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#CC0F172A" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="MaxDropDownHeight" Value="260" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="#F8FAFC" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Padding" Value="8,5" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="ItemBorder"
+                                            Background="{TemplateBinding Background}"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                          VerticalAlignment="Center"
+                                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="#6638BDF8" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="#8838BDF8" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          Content="{TemplateBinding SelectedItem}"
+                                          ContentTemplate="{TemplateBinding ItemTemplate}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="MainBorder"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Grid>
+                                                <ContentPresenter Margin="8,0,28,0"
+                                                                  HorizontalAlignment="Left"
+                                                                  VerticalAlignment="Center"
+                                                                  Content="{TemplateBinding Content}"
+                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                                  ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                                <Path HorizontalAlignment="Right"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,9,0"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z"
+                                                      Fill="#F8FAFC" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#64748B" />
+                                                <Setter TargetName="MainBorder" Property="Background" Value="#DD1E293B" />
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#FF3B30" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Fade">
+                                <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="#F20F172A"
+                                        BorderBrush="#475569"
+                                        BorderThickness="1">
+                                    <ScrollViewer CanContentScroll="True">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.58" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="ColorOptionTemplate">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="76"
+                        Height="16"
+                        Margin="0,0,10,0"
+                        Background="{Binding Value}"
+                        BorderBrush="#AACBD5E1"
+                        BorderThickness="1" />
+                <TextBlock Text="{Binding Value}"
+                           Foreground="#F8FAFC"
+                           FontSize="16"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+
+        <Style x:Key="DialogButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="126" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="#F6E84A" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="14,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#FF3B30" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Foreground" Value="#FF3B30" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="22"
+            Padding="22"
+            Background="#CC020617"
+            BorderBrush="#334155"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="{Binding DialogTitle}"
+                       Foreground="#F8FAFC"
+                       FontSize="22"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,18" />
+
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <GroupBox Header="基本信息"
+                              Foreground="#F8FAFC"
+                              Background="#990F172A"
+                              BorderBrush="#475569"
+                              FontSize="16"
+                              Margin="32,0,32,18"
+                              Padding="18">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="126" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="28" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="210" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="86" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="等效部件名称" Style="{StaticResource DialogLabelStyle}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                            <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding PartName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="等效材料" Style="{StaticResource DialogLabelStyle}" />
+                            <TextBlock Grid.Row="0" Grid.Column="5" Style="{StaticResource DialogColonStyle}" />
+                            <ComboBox Grid.Row="0"
+                                      Grid.Column="6"
+                                      IsEditable="False"
+                                      ItemsSource="{Binding MaterialOptions}"
+                                      SelectedItem="{Binding SelectedMaterial, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Style="{StaticResource DialogComboBoxStyle}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="等效厚度(mm)" Style="{StaticResource DialogLabelStyle}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="2"
+                                     Text="{Binding EquivalentThicknessText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource NumericTextBoxStyle}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="显示颜色" Style="{StaticResource DialogLabelStyle}" />
+                            <TextBlock Grid.Row="1" Grid.Column="5" Style="{StaticResource DialogColonStyle}" />
+                            <ComboBox Grid.Row="1"
+                                      Grid.Column="6"
+                                      IsEditable="False"
+                                      ItemsSource="{Binding ColorOptions}"
+                                      SelectedValue="{Binding SelectedDisplayColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="Value"
+                                      ItemTemplate="{StaticResource ColorOptionTemplate}"
+                                      Style="{StaticResource DialogComboBoxStyle}" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="易损面积" Style="{StaticResource DialogLabelStyle}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                            <TextBox Grid.Row="2"
+                                     Grid.Column="2"
+                                     Text="{Binding VulnerableAreaText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource NumericTextBoxStyle}" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="部件描述" Style="{StaticResource DialogLabelStyle}" VerticalAlignment="Top" Margin="0,6,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource DialogColonStyle}" VerticalAlignment="Top" Margin="0,6,0,0" />
+                            <TextBox Grid.Row="3"
+                                     Grid.Column="2"
+                                     Grid.ColumnSpan="5"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Style="{StaticResource DialogTextBoxStyle}"
+                                     Height="72"
+                                     VerticalContentAlignment="Top"
+                                     Padding="6"
+                                     Text="{Binding PartDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Header="部件参数"
+                              Foreground="#F8FAFC"
+                              Background="#990F172A"
+                              BorderBrush="#475569"
+                              FontSize="16"
+                              Margin="32,0,32,0"
+                              Padding="18">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="126" />
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="210" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="等效形状" Style="{StaticResource DialogLabelStyle}" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                <ComboBox Grid.Column="2"
+                                          IsEditable="False"
+                                          ItemsSource="{Binding ShapeTypeOptions}"
+                                          SelectedItem="{Binding SelectedShapeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          Style="{StaticResource DialogComboBoxStyle}" />
+                            </Grid>
+
+                            <TextBlock Text="形状参数" Style="{StaticResource SectionTitleTextStyle}" />
+                            <ItemsControl ItemsSource="{Binding Parameters}"
+                                          Margin="0,0,0,2">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,10,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="14" />
+                                                <ColumnDefinition Width="130" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Label}" Style="{StaticResource DialogLabelStyle}" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                            <TextBox Grid.Column="2"
+                                                     Text="{Binding ValueText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource NumericTextBoxStyle}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <StackPanel>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsTransformVisible}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock Text="中心坐标" Style="{StaticResource SectionTitleTextStyle}" />
+                                <UniformGrid Columns="3" Margin="0,0,0,2">
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="X(mm)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding CenterXText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Y(mm)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding CenterYText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Z(mm)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding CenterZText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                </UniformGrid>
+
+                                <TextBlock Text="姿态角度" Style="{StaticResource SectionTitleTextStyle}" />
+                                <UniformGrid Columns="3">
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="X(°)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding RotationXText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Y(°)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding RotationYText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,10,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Z(°)" Style="{StaticResource DialogLabelStyle}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                                        <TextBox Grid.Column="2" Text="{Binding RotationZText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource NumericTextBoxStyle}" />
+                                    </Grid>
+                                </UniformGrid>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2"
+                        HorizontalAlignment="Center"
+                        Margin="0,20,0,0">
+                <TextBlock Text="{Binding ValidationMessage}"
+                           Foreground="#FF6B6B"
+                           FontSize="14"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <Trigger Property="Text" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center">
+                    <Button Content="保存并退出"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Command="{Binding SaveCommand}" />
+                    <Button Content="取消"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

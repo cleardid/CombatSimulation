@@ -1,4 +1,4 @@
-namespace CombatSimulation.Models.Unity
+﻿namespace CombatSimulation.Models.Unity
 {
     /// <summary>
     /// 定义 WPF 与 Unity 通信时使用的命令名和事件名。
@@ -33,6 +33,27 @@ namespace CombatSimulation.Models.Unity
         /// 聚焦相机命令，用于控制 Unity 相机定位到指定目标或部件。
         /// </summary>
         public const string FocusCamera = "focus_camera";
+
+
+        /// <summary>
+        /// 显示目标命令。data 为目标唯一标识。
+        /// </summary>
+        public const string ShowTarget = "show_target";
+
+        /// <summary>
+        /// 高亮部件命令。data 为部件唯一标识。
+        /// </summary>
+        public const string HighlightPart = "highlight_part";
+
+        /// <summary>
+        /// 显示部件命令。data 为当前需要显示的部件唯一标识列表。
+        /// </summary>
+        public const string ShowParts = "show_parts";
+
+        /// <summary>
+        /// 修改目标命令。当前用于把修改后的单个部件数据同步给 Unity。
+        /// </summary>
+        public const string UpdateTarget = "update_target";
 
         /// <summary>
         /// 模型加载完成事件，由 Unity 通知 WPF 指定模型已经完成加载。

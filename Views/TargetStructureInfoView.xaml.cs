@@ -1,8 +1,10 @@
-﻿using CombatSimulation.Services.Unity;
+﻿using CombatSimulation.Models;
+using CombatSimulation.Services.Unity;
+using CombatSimulation.ViewModels;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 
 namespace CombatSimulation.Views
@@ -85,6 +87,28 @@ namespace CombatSimulation.Views
         {
             MarkHostBoundsDirtyAndUpdate(showAfterUpdate: IsVisible);
             StartHostBoundsStabilization();
+        }
+
+        private void OnStructureTreeSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+        {
+            if (DataContext is TargetInfoViewModel viewModel && e.NewValue is TargetStructureTreeNode node)
+            {
+                viewModel.SelectStructureNode(node);
+            }
+        }
+
+        private void OnOpenAddContextMenuClicked(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (sender is not Button button || button.ContextMenu == null)
+            {
+                return;
+            }
+
+            button.ContextMenu.PlacementTarget = button;
+            button.ContextMenu.Placement = PlacementMode.Bottom;
+            button.ContextMenu.IsOpen = true;
         }
 
         private void ActivateUnityWindow()
@@ -338,7 +362,7 @@ namespace CombatSimulation.Views
                 return true;
             }
 
-            Matrix transformToDevice = PresentationSource.FromVisual(UnityNativeHost)?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+            System.Windows.Media.Matrix transformToDevice = PresentationSource.FromVisual(UnityNativeHost)?.CompositionTarget?.TransformToDevice ?? System.Windows.Media.Matrix.Identity;
             width = Math.Max(0, (int)Math.Round(UnityNativeHost.ActualWidth * transformToDevice.M11));
             height = Math.Max(0, (int)Math.Round(UnityNativeHost.ActualHeight * transformToDevice.M22));
 

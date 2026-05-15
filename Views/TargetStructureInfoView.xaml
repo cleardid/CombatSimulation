@@ -1,7 +1,9 @@
 ﻿<UserControl x:Class="CombatSimulation.Views.TargetStructureInfoView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:CombatSimulation.Models"
              xmlns:unityControls="clr-namespace:CombatSimulation.Controls"
+             xmlns:util="clr-namespace:CombatSimulation.Util"
              Loaded="OnLoaded"
              Unloaded="OnUnloaded"
              IsVisibleChanged="OnIsVisibleChanged">
@@ -9,103 +11,435 @@
     <!-- 不要设置 DataContext。
          这里继承 TargetInfoView 的 TargetInfoViewModel。 -->
 
-    <Grid>
+    <UserControl.Resources>
+        <util:BindingProxy x:Key="TargetStructureViewModelProxy" Data="{Binding}" />
+
+        <Style x:Key="TreeActionButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SystemOrPartActionButtonStyle" TargetType="Button" BasedOn="{StaticResource TreeActionButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding NodeType}" Value="目标">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AddActionButtonStyle" TargetType="Button" BasedOn="{StaticResource TreeActionButtonStyle}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding NodeType}" Value="系统">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ModifyIconStyle" TargetType="Image">
+            <Setter Property="Source" Value="/Resource/btnMod_L.png" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnMod.png" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnMod.png" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DeleteIconStyle" TargetType="Image">
+            <Setter Property="Source" Value="/Resource/btnDel_L.png" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnDel.png" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnDel.png" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AddIconStyle" TargetType="Image">
+            <Setter Property="Source" Value="/Resource/btnAdd_L.png" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnAdd.png" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                    <Setter Property="Source" Value="/Resource/btnAdd.png" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+
+        <Style x:Key="TreeViewExpanderToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent">
+                            <Path x:Name="Arrow"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Data="M 2 1 L 2 9 L 7 5 Z"
+                                  Fill="#9CA3AF"
+                                  SnapsToDevicePixels="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="Data" Value="M 1 3 L 9 3 L 5 8 Z" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Arrow" Property="Fill" Value="#F6E84A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TreeAddContextMenuStyle" TargetType="{x:Type ContextMenu}">
+            <Setter Property="Background" Value="#EE0F172A" />
+            <Setter Property="BorderBrush" Value="#3B4A5F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContextMenu}">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TreeAddMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="MinWidth" Value="230" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Background" Value="#EE0F172A" />
+            <Setter Property="Foreground" Value="#EAF6FF" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Border x:Name="MenuItemBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="#334155"
+                                BorderThickness="0,0,0,1"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter ContentSource="Header"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="MenuItemBorder" Property="Background" Value="#CC13324C" />
+                                <Setter Property="Foreground" Value="#FFFF00" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#8099B3C8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+
+        <Style x:Key="DetailGroupBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="#B90F172A" />
+            <Setter Property="BorderBrush" Value="#3B4A5F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+
+        <Style x:Key="DetailHeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#EAF6FF" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="FirstDetailTitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource DetailHeaderTextStyle}">
+            <Setter Property="Text" Value="部件基础信息" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="系统">
+                    <Setter Property="Text" Value="系统基础信息" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="目标">
+                    <Setter Property="Text" Value="目标基础信息" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SecondDetailTitleTextStyle" TargetType="TextBlock" BasedOn="{StaticResource DetailHeaderTextStyle}">
+            <Setter Property="Text" Value="结构信息(单位:mm)" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="系统">
+                    <Setter Property="Text" Value="系统结构信息" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="目标">
+                    <Setter Property="Text" Value="目标结构信息" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PartOnlyDetailGroupBorderStyle" TargetType="Border" BasedOn="{StaticResource DetailGroupBorderStyle}">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="系统">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedStructureNode.NodeType}" Value="目标">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="DetailRowTemplate" DataType="{x:Type models:TargetDetailRow}">
+            <Grid MinHeight="34">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="#9913324C"
+                        BorderBrush="#334155"
+                        BorderThickness="0,0,1,1"
+                        Padding="8,4">
+                    <TextBlock Text="{Binding Label}"
+                               Foreground="#EAF6FF"
+                               FontSize="15"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="#80102033"
+                        BorderBrush="#334155"
+                        BorderThickness="0,0,0,1"
+                        Padding="8,4">
+                    <TextBlock Text="{Binding Value}"
+                               Foreground="#EAF6FF"
+                               FontSize="15"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <HierarchicalDataTemplate DataType="{x:Type models:TargetStructureTreeNode}"
+                                  ItemsSource="{Binding Children}">
+            <Grid Margin="0,1,0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <CheckBox Grid.Column="0"
+                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                          IsTabStop="False"
+                          Focusable="False"
+                          VerticalAlignment="Center"
+                          Margin="0,0,4,0" />
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Name}"
+                           Foreground="#EAF6FF"
+                           FontSize="17"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="6,0,0,0">
+                    <Button Style="{StaticResource SystemOrPartActionButtonStyle}"
+                            ToolTip="修改"
+                            Command="{Binding Data.RequestModifyStructureNodeCommand, Source={StaticResource TargetStructureViewModelProxy}}"
+                            CommandParameter="{Binding}">
+                        <Image Style="{StaticResource ModifyIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource SystemOrPartActionButtonStyle}"
+                            ToolTip="删除"
+                            Command="{Binding Data.RequestDeleteStructureNodeCommand, Source={StaticResource TargetStructureViewModelProxy}}"
+                            CommandParameter="{Binding}">
+                        <Image Style="{StaticResource DeleteIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource AddActionButtonStyle}"
+                            ToolTip="添加子系统或底层部件"
+                            Click="OnOpenAddContextMenuClicked">
+                        <Button.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                         Style="{StaticResource TreeAddContextMenuStyle}">
+                                <MenuItem Header="子系统（可添加底层部件）"
+                                          Style="{StaticResource TreeAddMenuItemStyle}"
+                                          Command="{Binding Data.RequestAddChildSystemCommand, Source={StaticResource TargetStructureViewModelProxy}}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="底层部件"
+                                          Style="{StaticResource TreeAddMenuItemStyle}"
+                                          Command="{Binding Data.RequestAddChildPartCommand, Source={StaticResource TargetStructureViewModelProxy}}"
+                                          CommandParameter="{Binding}" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                        <Image Style="{StaticResource AddIconStyle}" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </HierarchicalDataTemplate>
+    </UserControl.Resources>
+
+    <Grid Background="Transparent">
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="360" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="800" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧：目标结构信息 -->
+        <!-- 左侧：目标-系统-部件结构树 -->
         <Border Grid.Column="0"
-                Style="{DynamicResource SubCardStyle}"
-                Margin="0,0,20,0">
+                Background="#B90F172A"
+                BorderBrush="#223B4A5F"
+                BorderThickness="1"
+                Padding="10,6"
+                ClipToBounds="True">
+            <TreeView ItemsSource="{Binding SelectedTarget.StructureTreeNodes}"
+                      SelectedItemChanged="OnStructureTreeSelectedItemChanged"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Foreground="#EAF6FF"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <TreeView.Resources>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                        <Setter Property="Foreground" Value="#EAF6FF" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="FontSize" Value="17" />
+                        <Setter Property="Margin" Value="0,1,0,1" />
+                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TreeViewItem">
+                                    <StackPanel Background="Transparent">
+                                        <Border x:Name="SelectionBorder"
+                                                Background="Transparent"
+                                                Padding="0"
+                                                SnapsToDevicePixels="True">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <TextBlock Text="目标结构树"
-                               FontSize="22"
-                               FontWeight="Bold"
-                               Margin="0,0,0,16" />
+                                                <ToggleButton x:Name="Expander"
+                                                              Grid.Column="0"
+                                                              Style="{StaticResource TreeViewExpanderToggleStyle}"
+                                                              IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                              ClickMode="Press" />
 
-                    <TextBlock Text="{Binding SelectedTarget.Name}"
-                               FontSize="18"
-                               FontWeight="Bold" />
+                                                <ContentPresenter x:Name="PART_Header"
+                                                                  Grid.Column="1"
+                                                                  ContentSource="Header"
+                                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                            </Grid>
+                                        </Border>
 
-                    <TextBlock Text="{Binding SelectedTarget.Code}"
-                               Foreground="#BFD4F5"
-                               Margin="0,4,0,12" />
+                                        <ItemsPresenter x:Name="ItemsHost"
+                                                        Margin="16,0,0,0" />
+                                    </StackPanel>
 
-                    <TextBlock Text="{Binding SelectedTarget.Description}"
-                               Foreground="#BFD4F5"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,18" />
-
-                    <TextBlock Text="结构节点"
-                               FontSize="16"
-                               FontWeight="Bold"
-                               Margin="0,0,0,10" />
-
-                    <ItemsControl ItemsSource="{Binding SelectedTarget.StructureNodes}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="#331E293B"
-                                        BorderBrush="#334155"
-                                        BorderThickness="1"
-                                        CornerRadius="8"
-                                        Padding="10,8"
-                                        Margin="0,0,0,8">
-
-                                    <TextBlock Text="{Binding StringFormat=▸ {0}}"
-                                               Foreground="#BFD4F5" />
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </ScrollViewer>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsExpanded" Value="False">
+                                            <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" />
+                                        </Trigger>
+                                        <Trigger Property="HasItems" Value="False">
+                                            <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="SelectionBorder" Property="Background" Value="#331A4A72" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="SelectionBorder" Property="Background" Value="#8840739B" />
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Foreground" Value="#668EA9BF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TreeView.Resources>
+            </TreeView>
         </Border>
 
-        <!-- 右侧：Unity 模型可视化接口。仅目标结构信息页面拥有该区域。 -->
-        <StackPanel Grid.Column="1">
-            <TextBlock Text="Unity 模型可视化接口"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       Margin="0,0,0,16" />
-
-            <StackPanel Orientation="Horizontal"
-                        Margin="0,0,0,16">
-
-                <Button Content="启动预览器"
-                        Width="110"
-                        Height="34"
-                        Margin="0,0,12,0"
-                        Command="{Binding LaunchPreviewCommand}" />
-
-                <Button Content="同步当前目标"
-                        Width="120"
-                        Height="34"
-                        Margin="0,0,12,0"
-                        Command="{Binding SyncCurrentTargetCommand}" />
-
-                <Button Content="导入模型"
-                        Width="100"
-                        Height="34"
-                        Command="{Binding ImportModelCommand}" />
-            </StackPanel>
+        <!-- 右侧：Unity 窗口 + 底部结构属性信息 -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="168" />
+            </Grid.RowDefinitions>
 
             <Border x:Name="UnityHostBorder"
-                    Background="#AA050A12"
-                    BorderBrush="#26384F"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Height="600"
+                    Grid.Row="0"
+                    Background="#000000"
+                    BorderBrush="#223B4A5F"
+                    BorderThickness="1,1,1,0"
                     ClipToBounds="True"
                     SizeChanged="OnUnityHostSizeChanged">
 
                 <!--
                     UnityHostControl 会创建一个真正的 Win32 子窗口。
                     Unity 进程窗口被挂到该 HWND 下，始终使用 (0,0,width,height) 填满宿主窗口。
-                    不再把 Unity 直接挂到 WPF 主窗口，也不再反复计算相对于主窗口的坐标。
                 -->
                 <unityControls:UnityHostControl x:Name="UnityNativeHost"
                                                 HorizontalAlignment="Stretch"
@@ -115,37 +449,98 @@
                                                 NativeHostBoundsChanged="OnUnityNativeHostBoundsChanged" />
             </Border>
 
-            <Border Background="#CC1F2937"
-                    CornerRadius="8"
-                    Padding="12"
-                    Margin="0,16,0,0">
+            <Grid Grid.Row="1"
+                  Background="#A60B1120"
+                  Margin="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.05*" />
+                    <ColumnDefinition Width="0.9*" />
+                    <ColumnDefinition Width="0.9*" />
+                    <ColumnDefinition Width="0.9*" />
+                </Grid.ColumnDefinitions>
 
-                <StackPanel>
-                    <TextBlock Text="Unity 状态"
-                               FontWeight="Bold" />
+                <Border Grid.Column="0"
+                        Style="{StaticResource DetailGroupBorderStyle}">
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Top"
+                                Height="28"
+                                Background="#CC13324C"
+                                Padding="8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource FirstDetailTitleTextStyle}" />
+                            </StackPanel>
+                        </Border>
 
-                    <TextBlock Text="{Binding UnityStatus}"
-                               Foreground="#F8FAFC"
-                               Margin="0,6,0,0"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedBasicDetailRows}"
+                                          ItemTemplate="{StaticResource DetailRowTemplate}" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
 
-            <Border Background="#CC1F2937"
-                    CornerRadius="8"
-                    Padding="12"
-                    Margin="0,16,0,0">
+                <Border Grid.Column="1"
+                        Style="{StaticResource DetailGroupBorderStyle}">
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Top"
+                                Height="28"
+                                Background="#CC13324C"
+                                Padding="8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource SecondDetailTitleTextStyle}" />
+                            </StackPanel>
+                        </Border>
 
-                <StackPanel>
-                    <TextBlock Text="模块状态"
-                               FontWeight="Bold" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedStructureDetailRows}"
+                                          ItemTemplate="{StaticResource DetailRowTemplate}" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
 
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="#F8FAFC"
-                               Margin="0,6,0,0"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-        </StackPanel>
+                <Border Grid.Column="2"
+                        Style="{StaticResource PartOnlyDetailGroupBorderStyle}">
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Top"
+                                Height="28"
+                                Background="#CC13324C"
+                                Padding="8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="位置信息(单位:mm)"
+                                           Style="{StaticResource DetailHeaderTextStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedPositionDetailRows}"
+                                          ItemTemplate="{StaticResource DetailRowTemplate}" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="3"
+                        Style="{StaticResource PartOnlyDetailGroupBorderStyle}">
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Top"
+                                Height="28"
+                                Background="#CC13324C"
+                                Padding="8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="角度信息(单位:°)"
+                                           Style="{StaticResource DetailHeaderTextStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedAngleDetailRows}"
+                                          ItemTemplate="{StaticResource DetailRowTemplate}" />
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

@@ -16,17 +16,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Commands\" />
-    <Folder Include="Common\" />
-    <Folder Include="Resource\" />
     <Folder Include="Util\" />
   </ItemGroup>
   
   <ItemGroup>
-    <None Remove="Resource\pop.png" />
+    <None Remove="Resource\*.png" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <Resource Include="Resource\pop.png" />
+    <PackageReference Include="MySql.Data" Version="9.7.0" />
+    <Resource Include="Resource\*.png" />
   </ItemGroup>
 
 </Project>

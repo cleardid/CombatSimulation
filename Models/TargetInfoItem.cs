@@ -1,23 +1,43 @@
-﻿using System.Collections.ObjectModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System.Collections.ObjectModel;
 
 namespace CombatSimulation.Models
 {
     /// <summary>
-    /// 目标信息模型。
-    /// 只负责保存目标的基础数据，不负责界面选中状态。
+    /// 目标信息表。
+    /// 字段对应：目标名称、唯一标识 Code、种类、描述。
     /// </summary>
-    public sealed class TargetInfoItem
+    public sealed partial class TargetInfoItem : ObservableObject
     {
-        public string Name { get; init; } = string.Empty;
+        [ObservableProperty]
+        private string _name = string.Empty;
 
-        public string Code { get; init; } = string.Empty;
+        [ObservableProperty]
+        private string _code = string.Empty;
 
-        public string Category { get; init; } = string.Empty;
+        [ObservableProperty]
+        private string _category = string.Empty;
 
-        public string Description { get; init; } = string.Empty;
+        [ObservableProperty]
+        private string _description = string.Empty;
 
-        public ObservableCollection<string> StructureNodes { get; init; } = new();
+        /// <summary>
+        /// 目标系统信息表集合。
+        /// </summary>
+        [ObservableProperty]
+        private ObservableCollection<TargetSystemInfoItem> _systems = new();
 
-        public ObservableCollection<string> DamageTreeNodes { get; init; } = new();
+        /// <summary>
+        /// 结构树 UI 根节点。通常只有一个根节点，即当前目标本身。
+        /// </summary>
+        [ObservableProperty]
+        private ObservableCollection<TargetStructureTreeNode> _structureTreeNodes = new();
+
+        /// <summary>
+        /// 毁伤树节点暂保留原有字符串结构，避免影响毁伤树模块。
+        /// 后续可以按同样方式改成实体节点。
+        /// </summary>
+        [ObservableProperty]
+        private ObservableCollection<string> _damageTreeNodes = new();
     }
 }

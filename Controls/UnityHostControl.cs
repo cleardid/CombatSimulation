@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -24,6 +24,7 @@ namespace CombatSimulation.Controls
         private const int WsVisible = 0x10000000;
         private const int WsClipChildren = 0x02000000;
         private const int WsClipSiblings = 0x04000000;
+        private const int SsBlackRect = 0x00000004;
 
         private static readonly nint HwndTop = 0;
         private const uint SwpNoMove = 0x0002;
@@ -81,7 +82,7 @@ namespace CombatSimulation.Controls
                 0,
                 "STATIC",
                 string.Empty,
-                WsChild | WsVisible | WsClipChildren | WsClipSiblings,
+                WsChild | WsVisible | WsClipChildren | WsClipSiblings | SsBlackRect,
                 0,
                 0,
                 1,
