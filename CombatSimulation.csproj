@@ -20,11 +20,11 @@
   </ItemGroup>
   
   <ItemGroup>
-    <None Remove="Resource\*.png" />
+    <None Remove="Resources\Images\*.png" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="MySql.Data" Version="9.7.0" />
-    <Resource Include="Resource\*.png" />
+    <Resource Include="Resources\Images\*.png" />
     <None Include="target_mysql.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('target_mysql.json')" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CombatSimulation.ViewModels;
+using CombatSimulation.Views.Dialogs;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -8,7 +9,7 @@ namespace CombatSimulation.Views;
 /// <summary>
 /// 毁伤树叶子节点添加/修改窗口。
 /// </summary>
-public partial class DamageTreeLeafNodeEditWindow : Window
+public partial class DamageTreeLeafNodeEditWindow : DialogWindowBase
 {
     private readonly DamageTreeLeafNodeEditDialogViewModel _viewModel;
 
@@ -16,7 +17,7 @@ public partial class DamageTreeLeafNodeEditWindow : Window
     {
         InitializeComponent();
         _viewModel = new DamageTreeLeafNodeEditDialogViewModel(node, targetStructureRoots, isEditMode);
-        _viewModel.CloseRequested += OnCloseRequested;
+        BindCloseRequest(_viewModel);
         DataContext = _viewModel;
     }
 
@@ -25,10 +26,5 @@ public partial class DamageTreeLeafNodeEditWindow : Window
     private void OnTargetStructureSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         _viewModel.SelectedStructureNode = e.NewValue as TargetStructureTreeNode;
-    }
-
-    private void OnCloseRequested(object? sender, DialogCloseRequestedEventArgs e)
-    {
-        DialogResult = e.DialogResult;
     }
 }

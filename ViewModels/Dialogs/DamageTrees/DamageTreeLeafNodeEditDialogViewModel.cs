@@ -8,7 +8,7 @@ namespace CombatSimulation.ViewModels;
 /// <summary>
 /// 毁伤树叶子节点添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableObject
+public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     private bool _suppressPartSelectionNameSync;
 

@@ -9,7 +9,7 @@ namespace CombatSimulation.ViewModels;
 /// 目标部件添加/修改弹窗 ViewModel。
 /// 负责 ComboBox 数据源、动态形状参数、数值校验和编辑结果生成。
 /// </summary>
-public sealed partial class TargetPartEditDialogViewModel : ObservableObject
+public sealed partial class TargetPartEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     private static readonly IReadOnlyList<string> DefaultMaterialOptions = new[]
     {

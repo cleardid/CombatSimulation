@@ -5,6 +5,11 @@
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 弹窗统一样式。编辑弹窗颜色、输入框、按钮和下拉框样式集中在该文件。 -->
+                <ResourceDictionary Source="Resources/Styles/DialogWindowStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
             <!--
                 全局滚动条样式。
                 目标列表、结构树、详情区域和弹窗中的 ScrollViewer/ListBox/TreeView 都会默认使用该样式，

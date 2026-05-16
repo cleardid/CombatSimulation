@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -7,12 +7,18 @@ namespace CombatSimulation.ViewModels;
 /// <summary>
 /// 目标系统添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class TargetSystemEditDialogViewModel : ObservableObject
+public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     private readonly string _targetCode;
     private readonly string _parentSystemCode;
     private readonly bool _isTopSystem;
 
+    /// <summary>
+    /// 目标系统编辑界面 ViewModel
+    /// </summary>
+    /// <param name="system">新增或编辑的系统信息</param>
+    /// <param name="isEditMode">是否为编辑模式，若为编辑，则目标已经存在，否则为新增 </param>
+    /// <param name="parentSystemName">父系统名称</param>
     public TargetSystemEditDialogViewModel(TargetSystemInfoItem system, bool isEditMode)
     {
         EditedSystem = CloneSystem(system);
@@ -28,7 +34,8 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject
         DialogTitle = isEditMode ? "修改目标系统信息" : "添加目标子系统";
         SystemName = EditedSystem.SystemName;
         SystemDescription = EditedSystem.SystemDescription;
-        ParentSystemDisplayText = FormatParentSystemCode(_parentSystemCode);
+        // 使得显示其父系统名称，而不是父系统标识
+        ParentSystemDisplayText = GetParentSystemName(_parentSystemCode);
         IsTopSystemDisplayText = _isTopSystem ? "是" : "否";
     }
 
@@ -92,7 +99,12 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject
         CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: false));
     }
 
-    private static string FormatParentSystemCode(string parentSystemCode)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="parentSystemCode"></param>
+    /// <returns></returns>
+    private static string GetParentSystemName(string parentSystemCode)
     {
         return string.IsNullOrWhiteSpace(parentSystemCode) || parentSystemCode == "-1"
             ? "无（顶系统）"

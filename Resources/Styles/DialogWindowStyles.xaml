@@ -1,0 +1,388 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        弹窗统一样式入口。
+        修改弹窗整体颜色时，优先改这里的 Brush；不要在各个弹窗 XAML 中重复写 Background、BorderBrush 等颜色。
+    -->
+    <LinearGradientBrush x:Key="DialogWindowBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#061225" Offset="0" />
+        <GradientStop Color="#0B1B31" Offset="0.58" />
+        <GradientStop Color="#07101F" Offset="1" />
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="DialogPanelBrush" Color="#E60B1626" />
+    <SolidColorBrush x:Key="DialogInputBrush" Color="#CC0F172A" />
+    <SolidColorBrush x:Key="DialogInputHoverBrush" Color="#DD1E293B" />
+    <SolidColorBrush x:Key="DialogReadonlyBrush" Color="#771E293B" />
+    <SolidColorBrush x:Key="DialogBorderBrush" Color="#546784" />
+    <SolidColorBrush x:Key="DialogShellBorderBrush" Color="#42526A" />
+    <SolidColorBrush x:Key="DialogTextBrush" Color="#F8FAFC" />
+    <SolidColorBrush x:Key="DialogMutedTextBrush" Color="#CBD5E1" />
+    <SolidColorBrush x:Key="DialogAccentBrush" Color="#38BDF8" />
+    <SolidColorBrush x:Key="DialogWarningBrush" Color="#F6E84A" />
+    <SolidColorBrush x:Key="DialogErrorBrush" Color="#FF6B6B" />
+
+    <!-- 弹窗父类窗口本身的外观；所有编辑弹窗根节点均显式引用该样式。 -->
+    <Style x:Key="DialogWindowStyle" TargetType="Window">
+        <Setter Property="Background" Value="{StaticResource DialogWindowBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- 弹窗内容外层容器。若要调整弹窗内边距或面板颜色，改这里。 -->
+    <Style x:Key="DialogShellBorderStyle" TargetType="Border">
+        <Setter Property="Margin" Value="22" />
+        <Setter Property="Padding" Value="22" />
+        <Setter Property="Background" Value="{StaticResource DialogPanelBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogShellBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- 弹窗标题文本。 -->
+    <Style x:Key="DialogTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,22" />
+    </Style>
+
+    <!-- 表单左侧字段名称。 -->
+    <Style x:Key="DialogLabelStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+
+    <!-- 字段名称与输入框之间的冒号。 -->
+    <Style x:Key="DialogColonStyle" TargetType="TextBlock">
+        <Setter Property="Text" Value=":" />
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 弹窗单行文本输入框样式。高度固定为 30，避免被 Grid 行高拉伸。-->
+    <Style x:Key="DialogTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="MaxHeight" Value="30" />
+        <Setter Property="Margin" Value="0,6,0,6" />
+
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource DialogInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Padding" Value="6,0,6,0" />
+
+        <!-- 关键：固定高度后垂直居中 -->
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+
+    <!--
+    弹窗多行文本输入框样式。
+    用于“描述”“说明”等字段。
+
+    注意：
+    1. Height / MinHeight / MaxHeight 同时设置为 90，表示高度固定。
+    2. VerticalAlignment 设置为 Center，避免在 Grid 单元格中被拉伸。
+    3. AcceptsReturn=True，允许输入多行文本。
+    4. VerticalScrollBarVisibility=Auto，文本超过高度时显示滚动条，而不是撑大控件。 -->
+    <Style x:Key="DialogDescriptionTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Height" Value="90" />
+        <Setter Property="MinHeight" Value="90" />
+        <Setter Property="MaxHeight" Value="90" />
+        <Setter Property="Margin" Value="0,6,0,6" />
+
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource DialogInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Padding" Value="6" />
+
+        <!-- 关键：不要让 TextBox 在 Grid 单元格里纵向拉伸 -->
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+
+        <!-- 多行文本内容从顶部开始显示 -->
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+
+        <Setter Property="AcceptsReturn" Value="True" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
+    <!-- 数值输入框；高度固定为 30，所在行统一使用 42，上下各留 6 像素。 -->
+    <Style x:Key="NumericTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="MaxHeight" Value="30" />
+        <Setter Property="Margin" Value="0,6,0,6" />
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource DialogInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="TextAlignment" Value="Right" />
+    </Style>
+
+    <!-- 只读展示框，例如父系统、根节点等不可编辑字段；高度与单行输入框保持一致。 -->
+    <Style x:Key="ReadOnlyDisplayBoxStyle" TargetType="Border">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="MaxHeight" Value="30" />
+        <Setter Property="Margin" Value="0,6,0,6" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="{StaticResource DialogReadonlyBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="6,0" />
+    </Style>
+
+    <Style x:Key="ReadOnlyDisplayTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource DialogMutedTextBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- 弹窗内部小标题，例如“形状参数”“中心坐标”。 -->
+    <Style x:Key="SectionTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,10,0,10" />
+    </Style>
+
+    <!-- 校验错误提示；Text 为空时自动折叠。 -->
+    <Style x:Key="DialogValidationTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource DialogErrorBrush}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 下拉框透明点击层。 -->
+    <ControlTemplate x:Key="DialogComboBoxDropDownToggleTemplate" TargetType="ToggleButton">
+        <Border Background="Transparent" />
+    </ControlTemplate>
+
+    <!-- 下拉项深色样式。 -->
+    <Style x:Key="DialogComboBoxItemStyle" TargetType="ComboBoxItem">
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="ItemBorder"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            TextElement.Foreground="{TemplateBinding Foreground}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="#5538BDF8" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="#6638BDF8" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="ItemBorder" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        弹窗统一下拉框。
+        若某个 ComboBox 需要自定义项目显示，只需设置 ItemTemplate，外观仍由该样式控制。
+    -->
+    <Style x:Key="DialogComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="MaxHeight" Value="30" />
+        <Setter Property="Margin" Value="0,6,0,6" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="12,0,36,0" />
+        <Setter Property="Foreground" Value="{StaticResource DialogTextBrush}" />
+        <Setter Property="Background" Value="{StaticResource DialogInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource DialogBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="MaxDropDownHeight" Value="220" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource DialogComboBoxItemStyle}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid SnapsToDevicePixels="True">
+                        <Border x:Name="RootBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <Grid>
+                                <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"
+                                                  TextElement.FontSize="{TemplateBinding FontSize}"
+                                                  TextElement.FontWeight="{TemplateBinding FontWeight}" />
+                                <Path x:Name="Arrow"
+                                      Data="M 0 0 L 8 8 L 16 0"
+                                      Stroke="#D7E7F7"
+                                      StrokeThickness="1.7"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Width="13"
+                                      Height="7"
+                                      Stretch="Fill"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,12,0"
+                                      RenderTransformOrigin="0.5,0.5" />
+                            </Grid>
+                        </Border>
+                        <ToggleButton x:Name="DropDownToggle"
+                                      Template="{StaticResource DialogComboBoxDropDownToggleTemplate}"
+                                      Focusable="False"
+                                      ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+                        <Popup x:Name="PART_Popup"
+                               Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               PopupAnimation="Fade">
+                            <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                  Margin="0,5,0,0">
+                                <Border Background="#F20F172A"
+                                        BorderBrush="{StaticResource DialogBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8" />
+                                <ScrollViewer Margin="3"
+                                              CanContentScroll="True"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter />
+                                </ScrollViewer>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="RootBorder" Property="Background" Value="{StaticResource DialogInputHoverBrush}" />
+                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="#64748B" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="{StaticResource DialogAccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="RootBorder" Property="BorderBrush" Value="{StaticResource DialogAccentBrush}" />
+                            <Setter TargetName="Arrow" Property="RenderTransform">
+                                <Setter.Value>
+                                    <RotateTransform Angle="180" />
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="RootBorder" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 弹窗底部按钮区：外层 Grid 行固定为 50，按钮高 34，上下各留 8 像素。 -->
+    <Style x:Key="DialogActionAreaStyle" TargetType="StackPanel">
+        <Setter Property="Margin" Value="0,8,0,8" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 弹窗底部确认/取消按钮。 -->
+    <Style x:Key="DialogButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="112" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Foreground" Value="{StaticResource DialogWarningBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="14,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="#93C5FD" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Foreground" Value="#93C5FD" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 常用布尔转 Visibility 转换器。 -->
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+</ResourceDictionary>

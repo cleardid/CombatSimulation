@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -8,7 +8,7 @@ namespace CombatSimulation.ViewModels;
 /// 目标添加/修改弹窗 ViewModel。
 /// 只负责字段绑定、校验和生成编辑结果，不直接操作 TextBox 等 UI 元素。
 /// </summary>
-public sealed partial class TargetEditDialogViewModel : ObservableObject
+public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     private readonly string _targetCode;
 

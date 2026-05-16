@@ -1,0 +1,71 @@
+﻿<dialogs:DialogWindowBase x:Class="CombatSimulation.Views.TargetEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:CombatSimulation.Views.Dialogs"
+        Title="{Binding DialogTitle}"
+        Width="620"
+        Height="430"
+        MinWidth="620"
+        MinHeight="430"
+        MaxWidth="620"
+        MaxHeight="430"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Style="{StaticResource DialogWindowStyle}">
+<!-- 弹窗外层容器：面板颜色、边框和内边距集中在 DialogShellBorderStyle。 -->
+    <Border Style="{StaticResource DialogShellBorderStyle}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="50" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="{Binding DialogTitle}" Style="{StaticResource DialogTitleTextStyle}" Margin="0,0,0,22" />
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="102" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="目标名称" Style="{StaticResource DialogLabelStyle}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding TargetName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="目标种类" Style="{StaticResource DialogLabelStyle}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
+                <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TargetCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="目标描述" Style="{StaticResource DialogLabelStyle}" VerticalAlignment="Top" Margin="0,6,4,0" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource DialogColonStyle}" VerticalAlignment="Top" Margin="0,6,0,0" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="2"
+                         Style="{StaticResource DialogDescriptionTextBoxStyle}"
+                         Text="{Binding TargetDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+
+            <StackPanel Grid.Row="2"
+                        HorizontalAlignment="Center"
+                        Margin="0,8,0,8">
+                <TextBlock Text="{Binding ValidationMessage}" Style="{StaticResource DialogValidationTextStyle}" />
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center">
+                    <Button Content="保存并退出"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Command="{Binding SaveCommand}" />
+                    <Button Content="取消"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</dialogs:DialogWindowBase>

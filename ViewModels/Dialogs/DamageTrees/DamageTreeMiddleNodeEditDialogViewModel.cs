@@ -8,7 +8,7 @@ namespace CombatSimulation.ViewModels;
 /// <summary>
 /// 毁伤树中间节点添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : ObservableObject
+public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     public DamageTreeMiddleNodeEditDialogViewModel(DamageTreeNodeItem node, bool isEditMode)
     {

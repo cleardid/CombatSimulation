@@ -7,7 +7,7 @@ namespace CombatSimulation.ViewModels;
 /// <summary>
 /// 毁伤树基础信息添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class DamageTreeEditDialogViewModel : ObservableObject
+public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, IDialogRequestClose
 {
     public DamageTreeEditDialogViewModel(DamageTreeInfoItem tree, string targetName, bool isEditMode)
     {

@@ -1,6 +1,6 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CombatSimulation.ViewModels;
-using System.Windows;
+using CombatSimulation.Views.Dialogs;
 
 namespace CombatSimulation.Views;
 
@@ -8,7 +8,7 @@ namespace CombatSimulation.Views;
 /// 目标添加/修改窗口。唯一标识 Code 不在界面展示，由调用方内部生成并保持。
 /// 窗口代码后置只负责初始化 DataContext 和接收关闭请求。
 /// </summary>
-public partial class TargetEditWindow : Window
+public partial class TargetEditWindow : DialogWindowBase
 {
     private readonly TargetEditDialogViewModel _viewModel;
 
@@ -17,14 +17,9 @@ public partial class TargetEditWindow : Window
         InitializeComponent();
 
         _viewModel = new TargetEditDialogViewModel(target, isEditMode);
-        _viewModel.CloseRequested += OnCloseRequested;
+        BindCloseRequest(_viewModel);
         DataContext = _viewModel;
     }
 
     public TargetInfoItem EditedTarget => _viewModel.EditedTarget;
-
-    private void OnCloseRequested(object? sender, DialogCloseRequestedEventArgs e)
-    {
-        DialogResult = e.DialogResult;
-    }
 }
