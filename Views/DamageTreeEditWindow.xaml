@@ -8,8 +8,13 @@
         MinHeight="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <!-- 弹窗背景改为低饱和深色渐变，取消 pop.png，避免背景纹理干扰表单控件识别。 -->
     <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/Resource/pop.png" Stretch="UniformToFill" />
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#061225" Offset="0" />
+            <GradientStop Color="#0B1B31" Offset="0.58" />
+            <GradientStop Color="#07101F" Offset="1" />
+        </LinearGradientBrush>
     </Window.Background>
 
     <Window.Resources>
@@ -31,7 +36,7 @@
             <Setter Property="Height" Value="30" />
             <Setter Property="Foreground" Value="#F8FAFC" />
             <Setter Property="Background" Value="#CC0F172A" />
-            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderBrush" Value="#546784" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -45,10 +50,167 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
         </Style>
+
+        <!--
+            弹窗下拉框专用深色模板。
+            使用完整 ControlTemplate 并设置 OverridesDefaultStyle，避免系统 ComboBox 在展开或失焦时回退为白底。
+        -->
+        <ControlTemplate x:Key="DialogComboBoxDropDownToggleTemplate" TargetType="ToggleButton">
+            <Border Background="Transparent" />
+        </ControlTemplate>
+
+        <Style x:Key="DialogComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}"
+                                TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#5538BDF8" />
+                                <Setter Property="Foreground" Value="#F8FAFC" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#6638BDF8" />
+                                <Setter Property="Foreground" Value="#F8FAFC" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ItemBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DialogComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="12,0,36,0" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#CC0F172A" />
+            <Setter Property="BorderBrush" Value="#546784" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MaxDropDownHeight" Value="180" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DialogComboBoxItemStyle}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="RootBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                                      Margin="{TemplateBinding Padding}"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="Center"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                                      TextElement.FontSize="{TemplateBinding FontSize}"
+                                                      TextElement.FontWeight="{TemplateBinding FontWeight}" />
+                                    <Path x:Name="Arrow"
+                                          Data="M 0 0 L 8 8 L 16 0"
+                                          Stroke="#D7E7F7"
+                                          StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Width="13"
+                                          Height="7"
+                                          Stretch="Fill"
+                                          HorizontalAlignment="Right"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,12,0"
+                                          RenderTransformOrigin="0.5,0.5" />
+                                </Grid>
+                            </Border>
+                            <ToggleButton x:Name="DropDownToggle"
+                                          Template="{StaticResource DialogComboBoxDropDownToggleTemplate}"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <Popup x:Name="PART_Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                      Margin="0,5,0,0">
+                                    <Border Background="#F20B1626"
+                                            BorderBrush="#546784"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="4">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.32" />
+                                        </Border.Effect>
+                                        <ScrollViewer CanContentScroll="False" SnapsToDevicePixels="True">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="RootBorder" Property="Background" Value="#DD1E293B" />
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#7DD3FC" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#38BDF8" />
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="RootBorder" Property="Background" Value="#EE1E293B" />
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="#38BDF8" />
+                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="180" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="RootBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 本窗口内未显式设置样式的 ComboBox 也强制使用深色模板，防止遗漏后出现白底。 -->
+        <Style TargetType="ComboBox" BasedOn="{StaticResource DialogComboBoxStyle}" />
+
         <Style x:Key="ReadOnlyDisplayBoxStyle" TargetType="Border">
             <Setter Property="Height" Value="30" />
             <Setter Property="Background" Value="#660F172A" />
-            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderBrush" Value="#546784" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="6,0" />
         </Style>
@@ -73,13 +235,13 @@
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
-                <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#93C5FD" /></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="#93C5FD" /></Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
 
-    <Border Margin="22" Padding="22" Background="#CC020617" BorderBrush="#334155" BorderThickness="1">
+    <Border Margin="22" Padding="22" Background="#E60B1626" BorderBrush="#42526A" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -117,11 +279,17 @@
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="毁伤等级" Style="{StaticResource DialogLabelStyle}" />
                 <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
-                <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding DamageLevelInfo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+                <ComboBox Grid.Row="2"
+                          Grid.Column="2"
+                          ItemsSource="{Binding DamageLevelOptions}"
+                          SelectedItem="{Binding DamageLevelInfo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          Style="{StaticResource DialogComboBoxStyle}" />
 
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="毁伤树类型" Style="{StaticResource DialogLabelStyle}" />
                 <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
-                <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding DamageTreeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
+                <Border Grid.Row="3" Grid.Column="2" Style="{StaticResource ReadOnlyDisplayBoxStyle}">
+                    <TextBlock Text="{Binding DamageTreeType}" Foreground="#CBD5E1" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </Border>
 
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="根节点名称" Style="{StaticResource DialogLabelStyle}" />
                 <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />

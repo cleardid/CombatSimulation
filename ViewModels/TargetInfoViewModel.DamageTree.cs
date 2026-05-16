@@ -55,15 +55,31 @@ public sealed partial class TargetInfoViewModel
         {
             IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = BuildPartLookup(SelectedTarget);
             IReadOnlyList<DamageTreeInfoItem> storedTrees = _damageTreeRepository.LoadDamageTrees(SelectedTarget.Code, partLookup);
+
+            // 当前界面只展示轻度、中度、重度三棵功能毁伤树。
+            // 如果数据库中存在历史重复项，只保留同一毁伤等级的第一棵，避免下拉框出现多个“轻度毁伤树”。
+            int skippedTreeCount = 0;
+            HashSet<string> loadedLevels = new(StringComparer.Ordinal);
             foreach (DamageTreeInfoItem tree in storedTrees)
             {
+                tree.DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo);
+                tree.DamageTreeType = DamageTreeDefaults.DefaultTreeType;
+
+                if (!DamageTreeDefaults.IsKnownDamageLevel(tree.DamageLevelInfo) || !loadedLevels.Add(tree.DamageLevelInfo))
+                {
+                    skippedTreeCount++;
+                    continue;
+                }
+
                 DamageTrees.Add(tree);
             }
 
             SelectedDamageTree = DamageTrees.FirstOrDefault();
             StatusText = DamageTrees.Count == 0
                 ? $"目标“{SelectedTarget.Name}”暂无毁伤树"
-                : $"已读取目标“{SelectedTarget.Name}”的 {DamageTrees.Count} 棵毁伤树";
+                : skippedTreeCount == 0
+                    ? $"已读取目标“{SelectedTarget.Name}”的 {DamageTrees.Count} 棵毁伤树"
+                    : $"已读取目标“{SelectedTarget.Name}”的 {DamageTrees.Count} 棵毁伤树，已忽略 {skippedTreeCount} 棵非轻中重或重复毁伤树";
         }
         catch (Exception ex)
         {
@@ -81,22 +97,23 @@ public sealed partial class TargetInfoViewModel
         string treeCode = Guid.NewGuid().ToString("N");
         string rootNodeCode = Guid.NewGuid().ToString("N");
         string targetName = SelectedTarget?.Name ?? "目标";
+        string damageLevel = DamageTreeDefaults.FindFirstAvailableDamageLevel(DamageTrees);
 
         DamageTreeInfoItem tree = new()
         {
             DamageTreeCode = treeCode,
-            DamageTreeName = $"{targetName}轻度毁伤树",
+            DamageTreeName = DamageTreeDefaults.CreateDefaultTreeName(targetName, damageLevel),
             DamageTreeDescription = string.Empty,
             TargetCode = SelectedTarget?.Code ?? string.Empty,
-            DamageLevelInfo = "轻度毁伤",
-            DamageTreeType = "整体毁伤树"
+            DamageLevelInfo = damageLevel,
+            DamageTreeType = DamageTreeDefaults.DefaultTreeType
         };
 
         tree.RootNodes.Add(new DamageTreeNodeItem
         {
             NodeCode = rootNodeCode,
             DamageTreeCode = treeCode,
-            NodeName = $"{targetName}轻度毁伤",
+            NodeName = DamageTreeDefaults.CreateDefaultRootNodeName(targetName, damageLevel),
             ParentNodeCode = string.Empty,
             RelationType = DamageNodeRelationType.And,
             VoteThreshold = 1,
@@ -492,8 +509,9 @@ public sealed partial class TargetInfoViewModel
         tree.TargetCode = SelectedTarget.Code;
         tree.DamageTreeName = tree.DamageTreeName.Trim();
         tree.DamageTreeDescription = tree.DamageTreeDescription.Trim();
-        tree.DamageLevelInfo = tree.DamageLevelInfo.Trim();
-        tree.DamageTreeType = tree.DamageTreeType.Trim();
+        tree.DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo);
+        // 毁伤树类型固定为“功能毁伤”，避免历史“整体毁伤树”等旧值参与唯一性判断。
+        tree.DamageTreeType = DamageTreeDefaults.DefaultTreeType;
 
         if (string.IsNullOrWhiteSpace(tree.DamageTreeName))
         {
@@ -501,15 +519,9 @@ public sealed partial class TargetInfoViewModel
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(tree.DamageLevelInfo))
+        if (!DamageTreeDefaults.IsKnownDamageLevel(tree.DamageLevelInfo))
         {
-            StatusText = "请输入毁伤等级信息";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(tree.DamageTreeType))
-        {
-            StatusText = "请输入毁伤树类型";
+            StatusText = "毁伤树只能选择轻度毁伤、中度毁伤或重度毁伤";
             return false;
         }
 
@@ -547,6 +559,15 @@ public sealed partial class TargetInfoViewModel
             return false;
         }
 
+        bool damageLevelUsed = DamageTrees.Any(existingTree =>
+            !ReferenceEquals(existingTree, except) &&
+            string.Equals(DamageTreeDefaults.NormalizeDamageLevel(existingTree.DamageLevelInfo), tree.DamageLevelInfo, StringComparison.Ordinal));
+        if (damageLevelUsed)
+        {
+            StatusText = $"当前目标已经存在{tree.DamageLevelInfo}树，轻度、中度、重度各只能保留一棵";
+            return false;
+        }
+
         return true;
     }
 
@@ -560,7 +581,7 @@ public sealed partial class TargetInfoViewModel
         node.NodeDescription = node.NodeDescription.Trim();
         node.PartCode = node.PartCode.Trim();
         node.PartName = node.PartName.Trim();
-        node.VoteThreshold = Math.Max(1, node.VoteThreshold);
+        node.VoteThreshold = Math.Max(1f, node.VoteThreshold);
 
         if (string.IsNullOrWhiteSpace(node.NodeName))
         {

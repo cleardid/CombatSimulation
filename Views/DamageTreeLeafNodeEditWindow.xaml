@@ -9,8 +9,13 @@
         MinHeight="620"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <!-- 弹窗背景改为低饱和深色渐变，取消 pop.png，避免背景纹理干扰表单控件识别。 -->
     <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/Resource/pop.png" Stretch="UniformToFill" />
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#061225" Offset="0" />
+            <GradientStop Color="#0B1B31" Offset="0.58" />
+            <GradientStop Color="#07101F" Offset="1" />
+        </LinearGradientBrush>
     </Window.Background>
 
     <Window.Resources>
@@ -32,7 +37,7 @@
             <Setter Property="Height" Value="30" />
             <Setter Property="Foreground" Value="#F8FAFC" />
             <Setter Property="Background" Value="#CC0F172A" />
-            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderBrush" Value="#546784" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -63,16 +68,101 @@
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
-                <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="#FF3B30" /></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#93C5FD" /></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="#93C5FD" /></Trigger>
             </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PartSelectTreeViewExpanderToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent">
+                            <Path x:Name="Arrow"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Data="M 2 1 L 2 9 L 7 5 Z"
+                                  Fill="#9CA3AF"
+                                  SnapsToDevicePixels="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="Data" Value="M 1 3 L 9 3 L 5 8 Z" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Arrow" Property="Fill" Value="#F6E84A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="PartSelectTreeItemStyle" TargetType="TreeViewItem">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             <Setter Property="Foreground" Value="#EAF6FF" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="Margin" Value="0,1" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <!-- 复用目标结构树的深色选中模板，覆盖 TreeViewItem 失焦后的系统白底样式。 -->
+                        <StackPanel Background="Transparent">
+                            <Border x:Name="SelectionBorder"
+                                    Background="Transparent"
+                                    Padding="0"
+                                    SnapsToDevicePixels="True">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ToggleButton x:Name="Expander"
+                                                  Grid.Column="0"
+                                                  Style="{StaticResource PartSelectTreeViewExpanderToggleStyle}"
+                                                  IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  ClickMode="Press" />
+                                    <ContentPresenter x:Name="PART_Header"
+                                                      Grid.Column="1"
+                                                      ContentSource="Header"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                                </Grid>
+                            </Border>
+                            <ItemsPresenter x:Name="ItemsHost" Margin="16,0,0,0" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="False">
+                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SelectionBorder" Property="Background" Value="#331A4A72" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="SelectionBorder" Property="Background" Value="#8840739B" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#668EA9BF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <HierarchicalDataTemplate DataType="{x:Type models:TargetStructureTreeNode}" ItemsSource="{Binding Children}">
@@ -83,7 +173,7 @@
         </HierarchicalDataTemplate>
     </Window.Resources>
 
-    <Border Margin="22" Padding="22" Background="#CC020617" BorderBrush="#334155" BorderThickness="1">
+    <Border Margin="22" Padding="22" Background="#E60B1626" BorderBrush="#42526A" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -100,7 +190,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Background="#B90F172A" BorderBrush="#475569" BorderThickness="1" Padding="10">
+                <Border Grid.Column="0" Background="#AA0F1B2E" BorderBrush="#546784" BorderThickness="1" Padding="10">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="目标结构信息（请选择底层部件）" Foreground="#F8FAFC" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
                         <TreeView ItemsSource="{Binding TargetStructureRoots}"
@@ -131,7 +221,7 @@
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Text="绑定部件" Style="{StaticResource DialogLabelStyle}" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
-                    <Border Grid.Row="1" Grid.Column="2" Height="30" Background="#660F172A" BorderBrush="#475569" BorderThickness="1" Padding="6,0">
+                    <Border Grid.Row="1" Grid.Column="2" Height="30" Background="#660F172A" BorderBrush="#546784" BorderThickness="1" Padding="6,0">
                         <TextBlock Text="{Binding SelectedPartDisplayText}" Foreground="#CBD5E1" FontSize="15" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     </Border>
 

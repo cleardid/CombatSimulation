@@ -200,8 +200,6 @@
             </Setter>
         </Style>
 
-
-
         <!-- 目标类型筛选下拉框：覆盖系统默认 ComboBox，避免白底低对比度 -->
         <ControlTemplate x:Key="TargetTypeComboBoxDropDownToggleTemplate" TargetType="ToggleButton">
             <Border Background="Transparent" />

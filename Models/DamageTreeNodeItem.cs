@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
@@ -50,10 +50,11 @@ public sealed partial class DamageTreeNodeItem : ObservableObject
 
     /// <summary>
     /// 表决门阈值。只有 RelationType=Vote 时有效。
+    /// 使用 float 与数据库 DOUBLE 字段保持一致，便于表达小数阈值。
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RelationDisplayText))]
-    private int _voteThreshold = 1;
+    private float _voteThreshold = 1f;
 
     /// <summary>
     /// 叶子节点绑定的部件唯一标识。中间节点保持为空。
@@ -125,7 +126,7 @@ public sealed partial class DamageTreeNodeItem : ObservableObject
     {
         DamageNodeRelationType.And => "与门",
         DamageNodeRelationType.Or => "或门",
-        DamageNodeRelationType.Vote => $"表决门 ≥ {VoteThreshold}",
+        DamageNodeRelationType.Vote => $"表决门 ≥ {VoteThreshold:0.###}",
         _ => "叶子节点"
     };
 

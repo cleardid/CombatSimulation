@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 
 namespace CombatSimulation.Models;
@@ -65,9 +65,14 @@ public sealed partial class DamageTreeInfoItem : ObservableObject
                 return DamageTreeName;
             }
 
-            string level = string.IsNullOrWhiteSpace(DamageLevelInfo) ? "未设置等级" : DamageLevelInfo;
-            string type = string.IsNullOrWhiteSpace(DamageTreeType) ? "未设置类型" : DamageTreeType;
-            return $"{level} / {type}";
+            string level = string.IsNullOrWhiteSpace(DamageLevelInfo) ? "未设置等级" : DamageTreeDefaults.NormalizeDamageLevel(DamageLevelInfo);
+            return $"{level}树";
         }
     }
+
+    /// <summary>
+    /// 自定义 ComboBox 模板直接读取 SelectionBoxItem 时会调用 ToString()；
+    /// 返回 DisplayName 可以避免选中项显示为 CombatSimulation.Models.DamageTreeInfoItem。
+    /// </summary>
+    public override string ToString() => DisplayName;
 }

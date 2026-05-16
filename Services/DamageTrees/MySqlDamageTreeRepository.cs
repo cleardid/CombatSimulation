@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CombatSimulation.Models.Unity;
 using CombatSimulation.Services.MySql;
 using System.Security.Cryptography;
@@ -379,8 +379,8 @@ public sealed class MySqlDamageTreeRepository
             DamageTreeName = row.DamageTreeName ?? string.Empty,
             DamageTreeDescription = row.DamageTreeDescription ?? string.Empty,
             TargetCode = row.TargetCode ?? string.Empty,
-            DamageLevelInfo = row.DamageLevelInfo ?? string.Empty,
-            DamageTreeType = row.DamageTreeType ?? string.Empty
+            DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(row.DamageLevelInfo),
+            DamageTreeType = string.IsNullOrWhiteSpace(row.DamageTreeType) ? DamageTreeDefaults.DefaultTreeType : row.DamageTreeType.Trim()
         };
     }
 
@@ -408,7 +408,7 @@ public sealed class MySqlDamageTreeRepository
             NodeName = row.NodeName ?? string.Empty,
             ParentNodeCode = row.ParentNodeCode ?? string.Empty,
             RelationType = relationType,
-            VoteThreshold = Math.Max(1, row.VoteThreshold ?? 1),
+            VoteThreshold = Math.Max(1f, row.VoteThreshold ?? 1f),
             PartCode = partCode,
             PartName = part?.PartName ?? string.Empty,
             NodeDescription = row.NodeDescription ?? string.Empty,
@@ -425,8 +425,8 @@ public sealed class MySqlDamageTreeRepository
             DamageTreeName = tree.DamageTreeName?.Trim() ?? string.Empty,
             DamageTreeDescription = tree.DamageTreeDescription?.Trim() ?? string.Empty,
             TargetCode = tree.TargetCode?.Trim() ?? string.Empty,
-            DamageLevelInfo = tree.DamageLevelInfo?.Trim() ?? string.Empty,
-            DamageTreeType = tree.DamageTreeType?.Trim() ?? string.Empty
+            DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo),
+            DamageTreeType = string.IsNullOrWhiteSpace(tree.DamageTreeType) ? DamageTreeDefaults.DefaultTreeType : tree.DamageTreeType.Trim()
         };
     }
 
@@ -440,7 +440,8 @@ public sealed class MySqlDamageTreeRepository
             NodeName = node.NodeName?.Trim() ?? string.Empty,
             ParentNodeCode = node.ParentNodeCode?.Trim() ?? string.Empty,
             RelationType = (int)relationType,
-            VoteThreshold = relationType == DamageNodeRelationType.Vote ? Math.Max(1, node.VoteThreshold) : null,
+            // VoteThreshold 在数据库中使用 DOUBLE；保存时保留小数，只对下限做保护。
+            VoteThreshold = relationType == DamageNodeRelationType.Vote ? Math.Max(1f, node.VoteThreshold) : null,
             PartCode = relationType == DamageNodeRelationType.None ? node.PartCode?.Trim() ?? string.Empty : string.Empty,
             NodeDescription = node.NodeDescription?.Trim() ?? string.Empty,
             SortOrder = node.SortOrder

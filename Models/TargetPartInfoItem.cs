@@ -26,7 +26,7 @@ public sealed partial class TargetPartInfoItem : ObservableObject
     private string _materialId = string.Empty;
 
     [ObservableProperty]
-    private string _displayColor = "#808080";
+    private string _displayColor = TargetPartColorFormat.DefaultWpfDisplayColor;
 
     [ObservableProperty]
     private double _equivalentThickness;

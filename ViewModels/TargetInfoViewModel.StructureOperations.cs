@@ -47,7 +47,7 @@ public sealed partial class TargetInfoViewModel
             ShapeType = "长方体",
             PartDescription = string.Empty,
             MaterialId = "Fe",
-            DisplayColor = "#808080",
+            DisplayColor = TargetPartColorFormat.DefaultWpfDisplayColor,
             EquivalentThickness = 0,
             VulnerableArea = 0,
             SystemCode = parentNode.System?.SystemCode ?? string.Empty,

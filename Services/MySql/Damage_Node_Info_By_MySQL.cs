@@ -1,4 +1,4 @@
-using CombatSimulation.MySQLClassBase;
+﻿using CombatSimulation.MySQLClassBase;
 
 namespace CombatSimulation.Services.MySql;
 
@@ -48,9 +48,10 @@ public class Damage_Node_Info_By_MySQL : MySQLClassBaseClass
 
     /// <summary>
     /// 表决门阈值，仅 RelationType=2 时有效。
+    /// 使用 DOUBLE 存储，允许表决阈值为小数。
     /// </summary>
-    [MySQLClassHelpAttribute(true, "d_n_VoteThreshold", "INT", false, true)]
-    public int? VoteThreshold { get; set; }
+    [MySQLClassHelpAttribute(true, "d_n_VoteThreshold", "DOUBLE", false, true)]
+    public float? VoteThreshold { get; set; }
 
     /// <summary>
     /// 对应的目标部件唯一标识。仅叶子节点赋值。

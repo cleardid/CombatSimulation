@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
@@ -21,7 +21,7 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
         DialogTitle = isEditMode ? "修改毁伤树中间节点" : "添加毁伤树中间节点";
         NodeName = EditedNode.NodeName;
         SelectedRelationOption = RelationOptions.FirstOrDefault(item => item.RelationType == EditedNode.RelationType) ?? RelationOptions[0];
-        VoteThreshold = Math.Max(1, EditedNode.VoteThreshold);
+        VoteThreshold = Math.Max(1f, EditedNode.VoteThreshold);
         NodeDescription = EditedNode.NodeDescription;
     }
 
@@ -53,7 +53,7 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
     private DamageRelationOption? _selectedRelationOption;
 
     [ObservableProperty]
-    private int _voteThreshold = 1;
+    private float _voteThreshold = 1f;
 
     [ObservableProperty]
     private string _nodeDescription = string.Empty;
@@ -80,7 +80,7 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
         }
 
         DamageNodeRelationType relationType = SelectedRelationOption?.RelationType ?? DamageNodeRelationType.And;
-        if (relationType == DamageNodeRelationType.Vote && VoteThreshold < 1)
+        if (relationType == DamageNodeRelationType.Vote && VoteThreshold < 1f)
         {
             ValidationMessage = "表决门阈值必须大于或等于 1。";
             return;
@@ -110,4 +110,10 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
 /// <summary>
 /// 中间节点逻辑关系下拉选项。
 /// </summary>
-public sealed record DamageRelationOption(string DisplayName, DamageNodeRelationType RelationType);
+public sealed record DamageRelationOption(string DisplayName, DamageNodeRelationType RelationType)
+{
+    /// <summary>
+    /// ComboBox 使用自定义模板时会读取 SelectionBoxItem；重写 ToString 可确保选中项仍显示“与门/或门/表决门”，而不是 record 的完整类型文本。
+    /// </summary>
+    public override string ToString() => DisplayName;
+}

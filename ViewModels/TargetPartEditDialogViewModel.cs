@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Windows.Media;
 
 namespace CombatSimulation.ViewModels;
 /// <summary>
@@ -19,17 +18,15 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
 
     private static readonly IReadOnlyList<string> DefaultShapeTypeOptions = TargetPartShapeParameterDefinitions.ShapeTypes;
 
-    private const string DefaultDisplayColor = "#808080";
-
-    private static readonly IReadOnlyList<ColorOption> DefaultColorOptions = new[]
+    private static readonly IReadOnlyList<string> DefaultColorOptions = new[]
     {
-        new ColorOption("#808080"),
-        new ColorOption("#00AEEF"),
-        new ColorOption("#FFCC00"),
-        new ColorOption("#FF3300"),
-        new ColorOption("#FFFFFF"),
-        new ColorOption("#000000"),
-        new ColorOption("#00FF66")
+        TargetPartColorFormat.DefaultWpfDisplayColor,
+        "#00AEEF",
+        "#FFCC00",
+        "#FF3300",
+        "#FFFFFF",
+        "#000000",
+        "#00FF66"
     };
 
     private readonly string _systemCode;
@@ -63,7 +60,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
         RotationYText = FormatNumber(GetCachedParameterValue(part, 8, part.RotationY));
         RotationZText = FormatNumber(GetCachedParameterValue(part, 9, part.RotationZ));
         SelectedMaterial = string.IsNullOrWhiteSpace(part.MaterialId) ? "Fe" : part.MaterialId.Trim();
-        SelectedDisplayColor = NormalizeColorValue(part.DisplayColor);
+        SelectedDisplayColor = TargetPartColorFormat.ToWpfDisplayColor(part.DisplayColor);
         SelectedShapeType = TargetPartShapeParameterDefinitions.NormalizeShapeType(part.ShapeType);
 
         _isInitialized = true;
@@ -101,7 +98,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
     private string _equivalentThicknessText = "0.00";
 
     [ObservableProperty]
-    private string _selectedDisplayColor = DefaultDisplayColor;
+    private string _selectedDisplayColor = TargetPartColorFormat.DefaultWpfDisplayColor;
 
     [ObservableProperty]
     private string _vulnerableAreaText = "0.00";
@@ -220,7 +217,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
             ShapeType = shapeType,
             PartDescription = PartDescription.Trim(),
             MaterialId = string.IsNullOrWhiteSpace(SelectedMaterial) ? "Fe" : SelectedMaterial,
-            DisplayColor = NormalizeColorValue(SelectedDisplayColor),
+            DisplayColor = TargetPartColorFormat.ToWpfDisplayColor(SelectedDisplayColor),
             EquivalentThickness = equivalentThickness,
             VulnerableArea = vulnerableArea,
             SystemCode = _systemCode,
@@ -262,12 +259,13 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
 
     private void InitializeColorOptions(string displayColor)
     {
-        foreach (ColorOption color in DefaultColorOptions)
+        foreach (string color in DefaultColorOptions)
         {
-            ColorOptions.Add(new ColorOption(color.Value));
+            ColorOptions.Add(new ColorOption(color));
         }
 
-        string colorValue = NormalizeColorValue(displayColor);
+        // 编辑界面只绑定 #RRGGBB；若数据库旧值带 AA，这里统一裁剪后再进入下拉选项。
+        string colorValue = TargetPartColorFormat.ToWpfDisplayColor(displayColor);
         if (!ColorOptions.Any(item => string.Equals(item.Value, colorValue, StringComparison.OrdinalIgnoreCase)))
         {
             ColorOptions.Add(new ColorOption(colorValue));
@@ -381,63 +379,6 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject
     {
         TargetPartParameterItem? parameter = part.Parameters.FirstOrDefault(item => item.Index == index);
         return parameter?.Value ?? fallback;
-    }
-
-    /// <summary>
-    /// 部件编辑窗口只展示和绑定 #RRGGBB。
-    /// 如果数据库中已有 #RRGGBBAA，则在进入 WPF 绑定前去掉末尾透明度。
-    /// </summary>
-    private static string NormalizeColorValue(string? value)
-    {
-        string colorText = string.IsNullOrWhiteSpace(value) ? DefaultDisplayColor : value.Trim();
-        if (!colorText.StartsWith("#", StringComparison.Ordinal))
-        {
-            colorText = "#" + colorText;
-        }
-
-        colorText = colorText.ToUpperInvariant();
-
-        if (IsHexColor(colorText, 8))
-        {
-            colorText = "#" + colorText.Substring(1, 6);
-        }
-
-        if (!IsHexColor(colorText, 6))
-        {
-            return DefaultDisplayColor;
-        }
-
-        try
-        {
-            _ = ColorConverter.ConvertFromString(colorText);
-            return colorText;
-        }
-        catch (FormatException)
-        {
-            return DefaultDisplayColor;
-        }
-        catch (NotSupportedException)
-        {
-            return DefaultDisplayColor;
-        }
-    }
-
-    private static bool IsHexColor(string colorText, int hexDigitCount)
-    {
-        if (colorText.Length != hexDigitCount + 1 || !colorText.StartsWith("#", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        for (int i = 1; i < colorText.Length; i++)
-        {
-            if (!Uri.IsHexDigit(colorText[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static TargetPartInfoItem ClonePart(TargetPartInfoItem source)

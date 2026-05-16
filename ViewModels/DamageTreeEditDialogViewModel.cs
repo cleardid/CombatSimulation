@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -15,14 +15,20 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject
         DialogTitle = isEditMode ? "修改毁伤树信息" : "添加毁伤树信息";
         TargetDisplayName = targetName;
         DamageTreeName = EditedTree.DamageTreeName;
-        DamageLevelInfo = EditedTree.DamageLevelInfo;
-        DamageTreeType = EditedTree.DamageTreeType;
+        DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(EditedTree.DamageLevelInfo);
+        // 当前业务只维护功能毁伤树，弹窗中固定展示该默认类型，避免用户录入“整体毁伤树”等旧值后破坏轻/中/重唯一性。
+        DamageTreeType = DamageTreeDefaults.DefaultTreeType;
         DamageTreeDescription = EditedTree.DamageTreeDescription;
         RootNodeName = EditedTree.RootNodes.FirstOrDefault()?.NodeName ?? EditedTree.DamageTreeName;
         RootNodeDescription = EditedTree.RootNodes.FirstOrDefault()?.NodeDescription ?? string.Empty;
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+
+    /// <summary>
+    /// 毁伤等级固定为轻度、中度、重度三档；新增或修改时只能从这里选择。
+    /// </summary>
+    public IReadOnlyList<string> DamageLevelOptions => DamageTreeDefaults.DamageLevels;
 
     /// <summary>
     /// 保存成功后由调用方读取的毁伤树结果。
@@ -63,8 +69,8 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject
     private void Save()
     {
         string treeName = DamageTreeName.Trim();
-        string damageLevel = DamageLevelInfo.Trim();
-        string treeType = DamageTreeType.Trim();
+        string damageLevel = DamageTreeDefaults.NormalizeDamageLevel(DamageLevelInfo);
+        string treeType = DamageTreeDefaults.DefaultTreeType;
         string rootName = RootNodeName.Trim();
 
         if (string.IsNullOrWhiteSpace(treeName))
@@ -73,15 +79,9 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(damageLevel))
+        if (!DamageTreeDefaults.IsKnownDamageLevel(damageLevel))
         {
-            ValidationMessage = "请输入毁伤等级信息。";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(treeType))
-        {
-            ValidationMessage = "请输入毁伤树类型。";
+            ValidationMessage = "毁伤等级只能选择轻度毁伤、中度毁伤或重度毁伤。";
             return;
         }
 

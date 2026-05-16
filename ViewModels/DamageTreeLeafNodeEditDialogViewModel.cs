@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
@@ -10,6 +10,8 @@ namespace CombatSimulation.ViewModels;
 /// </summary>
 public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableObject
 {
+    private bool _suppressPartSelectionNameSync;
+
     public DamageTreeLeafNodeEditDialogViewModel(DamageTreeNodeItem node, IEnumerable<TargetStructureTreeNode> targetStructureRoots, bool isEditMode)
     {
         EditedNode = node.CloneShallow();
@@ -23,7 +25,10 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
             TargetStructureRoots.Add(root);
         }
 
+        // 修改模式打开时需要保留原节点名称；只有用户后续重新选择部件时才同步为部件名称。
+        _suppressPartSelectionNameSync = true;
         SelectedStructureNode = FindStructureNodeByPartCode(TargetStructureRoots, EditedNode.PartCode);
+        _suppressPartSelectionNameSync = false;
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
@@ -53,6 +58,22 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
 
     [ObservableProperty]
     private string _validationMessage = string.Empty;
+
+    partial void OnSelectedStructureNodeChanged(TargetStructureTreeNode? value)
+    {
+        if (_suppressPartSelectionNameSync || value?.Part == null)
+        {
+            return;
+        }
+
+        // 叶子节点表示某个部件的毁伤事件，因此选择部件后默认生成“部件名称 + 毁伤”作为节点名。
+        string partName = value.Part.PartName.Trim();
+
+        // 避免重复追加“毁伤”。
+        NodeName = partName.EndsWith("毁伤", StringComparison.Ordinal)
+            ? partName
+            : $"{partName}毁伤";
+    }
 
     /// <summary>
     /// 当前选中的部件显示文本。

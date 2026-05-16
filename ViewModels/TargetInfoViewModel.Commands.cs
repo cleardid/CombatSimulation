@@ -199,6 +199,14 @@ public sealed partial class TargetInfoViewModel
             return;
         }
 
+        // 业务上每个目标只允许轻度、中度、重度各一棵功能毁伤树；三档都存在时不再打开新增弹窗。
+        if (DamageTreeDefaults.DamageLevels.All(level =>
+                DamageTrees.Any(tree => string.Equals(DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo), level, StringComparison.Ordinal))))
+        {
+            RequestOperationMessage("当前目标已存在轻度、中度、重度三棵毁伤树，不能继续添加。");
+            return;
+        }
+
         DamageTreeEditRequested?.Invoke(this, new DamageTreeEditRequestedEventArgs(CreateDamageTreeDraft(), originalTree: null, isEditMode: false));
     }
 

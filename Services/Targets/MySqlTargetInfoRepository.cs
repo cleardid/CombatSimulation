@@ -15,9 +15,6 @@ namespace CombatSimulation.Services.Targets;
 /// </remarks>
 public sealed class MySqlTargetInfoRepository
 {
-    private const string DefaultWpfDisplayColor = "#808080";
-    private const string UnityColorAlphaSuffix = "0F";
-
     private readonly string _connectionString;
     private bool _databaseAndTableChecked;
 
@@ -95,7 +92,8 @@ public sealed class MySqlTargetInfoRepository
         List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
         foreach (Target_Part_Info_By_MySQL part in partRows)
         {
-            part.PartColor = ToUnityDatabaseColor(part.PartColor);
+            // Unity 快照只接受数据库色值语义，这里统一补齐固定透明度 0F。
+            part.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.PartColor);
         }
 
         snapshot.TargetParts.AddRange(partRows);
@@ -190,6 +188,8 @@ public sealed class MySqlTargetInfoRepository
             foreach (Target_Part_Info_By_MySQL part in parts)
             {
                 part.PartSystemCode = system.SystemCode;
+                // 主键迁移时直接复用数据库行，仍需补齐颜色透明度，避免旧数据继续以 #RRGGBB 写回。
+                part.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.PartColor);
                 db.mySqlCommand_TJ.Insert(part);
             }
 
@@ -245,14 +245,13 @@ public sealed class MySqlTargetInfoRepository
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
 
+        // ToMySqlPart 已集中处理颜色透明度、数值类型和参数字段映射，更新时只保留一次转换和一次写入。
+        db.mySqlCommand_TJ.Insert(ToMySqlPart(part));
+
         if (!string.Equals(originalPartCode, part.PartCode, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(originalPartCode))
         {
-            db.mySqlCommand_TJ.Insert(ToMySqlPart(part));
             db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(originalPartCode);
-            return;
         }
-
-        db.mySqlCommand_TJ.Insert(ToMySqlPart(part));
     }
 
 
@@ -390,6 +389,8 @@ public sealed class MySqlTargetInfoRepository
             }
 
             row.PartSystemCode = ConvertCode(row.PartSystemCode, systemCodeMap);
+            // 旧版数据迁移时顺便规范颜色格式，保证写回数据库后就是 Unity 所需的 #RRGGBB0F。
+            row.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(row.PartColor);
             db.mySqlCommand_TJ.Insert(row);
         }
 
@@ -593,54 +594,6 @@ public sealed class MySqlTargetInfoRepository
         };
     }
 
-    /// <summary>
-    /// WPF 界面只使用 #RRGGBB。
-    /// 数据库中读取到 #RRGGBBAA 时，末尾 AA 只作为 Unity 透明度，不进入界面绑定。
-    /// </summary>
-    private static string ToWpfDisplayColor(string? value)
-    {
-        string colorText = string.IsNullOrWhiteSpace(value) ? DefaultWpfDisplayColor : value.Trim();
-        if (!colorText.StartsWith("#", StringComparison.Ordinal))
-        {
-            colorText = "#" + colorText;
-        }
-
-        colorText = colorText.ToUpperInvariant();
-
-        if (IsHexColor(colorText, 8))
-        {
-            colorText = "#" + colorText.Substring(1, 6);
-        }
-
-        return IsHexColor(colorText, 6) ? colorText : DefaultWpfDisplayColor;
-    }
-
-    /// <summary>
-    /// MySQL/Unity 使用 #RRGGBBAA，透明度固定为 0F，即 Unity 侧 alpha = 15/255。
-    /// </summary>
-    private static string ToUnityDatabaseColor(string? value)
-    {
-        return ToWpfDisplayColor(value) + UnityColorAlphaSuffix;
-    }
-
-    private static bool IsHexColor(string colorText, int hexDigitCount)
-    {
-        if (colorText.Length != hexDigitCount + 1 || !colorText.StartsWith("#", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        for (int i = 1; i < colorText.Length; i++)
-        {
-            if (!Uri.IsHexDigit(colorText[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private static TargetPartInfoItem FromMySqlPart(Target_Part_Info_By_MySQL row)
     {
         string shapeType = TargetPartShapeParameterDefinitions.NormalizeShapeType(row.PartShape);
@@ -652,7 +605,7 @@ public sealed class MySqlTargetInfoRepository
             ShapeType = shapeType,
             PartDescription = row.PartDescription ?? string.Empty,
             MaterialId = row.PartMaterial ?? string.Empty,
-            DisplayColor = ToWpfDisplayColor(row.PartColor),
+            DisplayColor = TargetPartColorFormat.ToWpfDisplayColor(row.PartColor),
             EquivalentThickness = row.PartEquThickness,
             VulnerableArea = row.PartVulnerableArea,
             SystemCode = row.PartSystemCode ?? string.Empty
@@ -713,7 +666,7 @@ public sealed class MySqlTargetInfoRepository
             PartMaterial = string.IsNullOrWhiteSpace(part.MaterialId) ? "Fe" : part.MaterialId.Trim(),
             PartVulnerableArea = Convert.ToSingle(part.VulnerableArea),
             PartEquThickness = Convert.ToSingle(part.EquivalentThickness),
-            PartColor = ToUnityDatabaseColor(part.DisplayColor),
+            PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.DisplayColor),
             PartSystemCode = part.SystemCode?.Trim() ?? string.Empty
         };
 

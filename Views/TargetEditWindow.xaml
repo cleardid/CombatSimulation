@@ -8,11 +8,13 @@
         MinHeight="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <!-- 弹窗背景改为低饱和深色渐变，取消 pop.png，避免背景纹理干扰表单控件识别。 -->
     <Window.Background>
-        <ImageBrush ImageSource="pack://application:,,,/Resource/pop.png"
-                    Stretch="UniformToFill"
-                    AlignmentX="Center"
-                    AlignmentY="Center" />
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#061225" Offset="0" />
+            <GradientStop Color="#0B1B31" Offset="0.58" />
+            <GradientStop Color="#07101F" Offset="1" />
+        </LinearGradientBrush>
     </Window.Background>
 
     <Window.Resources>
@@ -36,7 +38,7 @@
             <Setter Property="Height" Value="30" />
             <Setter Property="Foreground" Value="#F8FAFC" />
             <Setter Property="Background" Value="#CC0F172A" />
-            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderBrush" Value="#546784" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -75,10 +77,10 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="#FF3B30" />
+                    <Setter Property="Foreground" Value="#93C5FD" />
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Foreground" Value="#FF3B30" />
+                    <Setter Property="Foreground" Value="#93C5FD" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -86,8 +88,8 @@
 
     <Border Margin="22"
             Padding="22"
-            Background="#CC020617"
-            BorderBrush="#334155"
+            Background="#E60B1626"
+            BorderBrush="#42526A"
             BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
