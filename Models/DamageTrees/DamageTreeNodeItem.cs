@@ -126,7 +126,7 @@ public sealed partial class DamageTreeNodeItem : ObservableObject
     {
         DamageNodeRelationType.And => "与门",
         DamageNodeRelationType.Or => "或门",
-        DamageNodeRelationType.Vote => $"表决门 ≥ {VoteThreshold:0.###}",
+        DamageNodeRelationType.Vote => $"表决门 ≥ {VoteThreshold:0.###}%",
         _ => "叶子节点"
     };
 

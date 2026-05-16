@@ -32,6 +32,10 @@ public partial class App : Application
         _ = StartUnityRuntimeInBackgroundAsync();
     }
 
+    /// <summary>
+    /// 重写退出时方法
+    /// </summary>
+    /// <param name="e"></param>
     protected override void OnExit(ExitEventArgs e)
     {
         try
@@ -53,6 +57,7 @@ public partial class App : Application
             Debug.WriteLine($"[App] 释放全局服务时发生异常：{ex.Message}");
         }
 
+        // 调用基类退出方法
         base.OnExit(e);
     }
 

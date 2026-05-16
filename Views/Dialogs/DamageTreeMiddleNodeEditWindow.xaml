@@ -48,7 +48,7 @@
                           DisplayMemberPath="DisplayName"
                           Style="{StaticResource DialogComboBoxStyle}" />
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="表决阈值" Style="{StaticResource DialogLabelStyle}" Visibility="{Binding IsVoteRelation, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="表决阈值(%)" Style="{StaticResource DialogLabelStyle}" Visibility="{Binding IsVoteRelation, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource DialogColonStyle}" Visibility="{Binding IsVoteRelation, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding VoteThreshold, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" Visibility="{Binding IsVoteRelation, Converter={StaticResource BooleanToVisibilityConverter}}" />
 

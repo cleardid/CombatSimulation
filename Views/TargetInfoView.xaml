@@ -11,6 +11,7 @@
     </UserControl.DataContext>
 
     <UserControl.Resources>
+        <!--目标信息增删改按钮风格-->
         <Style x:Key="TargetTextActionButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="76" />
             <Setter Property="Height" Value="30" />
@@ -50,6 +51,7 @@
     </UserControl.Resources>
 
     <Grid>
+        <!--定义两列 第一列为目标总览信息，第二列为具体信息-->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
@@ -82,7 +84,7 @@
                 </StackPanel>
 
                 <Border DockPanel.Dock="Top"
-                        Margin="0,0,0,18"
+                        Margin="0,0,0,16"
                         Padding="12"
                         Background="#661E293B"
                         BorderBrush="#334155"
@@ -102,7 +104,7 @@
                     </StackPanel>
                 </Border>
 
-
+                <!--显示的目标列表，绑定通过上面的下拉框选中的类型的所有目标-->
                 <ListBox ItemsSource="{Binding FilteredTargets}"
                          SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"
                          SelectionMode="Single"
