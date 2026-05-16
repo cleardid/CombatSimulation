@@ -1,4 +1,4 @@
-using CombatSimulation.Models;
+﻿using CombatSimulation.Models;
 using CombatSimulation.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
@@ -132,7 +132,7 @@ public partial class TargetInfoView : UserControl
         TargetStructureTreeNode node = e.Node;
         if (node.System != null)
         {
-            TargetSystemEditWindow window = new(node.System, isEditMode: true)
+            TargetSystemEditWindow window = new(node.System, isEditMode: true, viewModel.Targets)
             {
                 Owner = Window.GetWindow(this)
             };
@@ -190,7 +190,7 @@ public partial class TargetInfoView : UserControl
             return;
         }
 
-        TargetSystemEditWindow window = new(e.Draft, isEditMode: false)
+        TargetSystemEditWindow window = new(e.Draft, isEditMode: false, viewModel.Targets)
         {
             Owner = Window.GetWindow(this)
         };

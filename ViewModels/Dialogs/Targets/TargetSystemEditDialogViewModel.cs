@@ -14,12 +14,12 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
     private readonly bool _isTopSystem;
 
     /// <summary>
-    /// 目标系统编辑界面 ViewModel
+    /// 目标系统编辑界面 ViewModel。
     /// </summary>
-    /// <param name="system">新增或编辑的系统信息</param>
-    /// <param name="isEditMode">是否为编辑模式，若为编辑，则目标已经存在，否则为新增 </param>
-    /// <param name="parentSystemName">父系统名称</param>
-    public TargetSystemEditDialogViewModel(TargetSystemInfoItem system, bool isEditMode)
+    /// <param name="system">新增或编辑的系统信息。</param>
+    /// <param name="isEditMode">是否为编辑模式，若为编辑，则目标已经存在，否则为新增。</param>
+    /// <param name="allTargets">当前目标模块已经加载的全部目标数据，用于把父系统唯一标识解析为父系统名称。</param>
+    public TargetSystemEditDialogViewModel(TargetSystemInfoItem system, bool isEditMode, IEnumerable<TargetInfoItem>? allTargets = null)
     {
         EditedSystem = CloneSystem(system);
         if (string.IsNullOrWhiteSpace(EditedSystem.SystemCode))
@@ -34,8 +34,8 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
         DialogTitle = isEditMode ? "修改目标系统信息" : "添加目标子系统";
         SystemName = EditedSystem.SystemName;
         SystemDescription = EditedSystem.SystemDescription;
-        // 使得显示其父系统名称，而不是父系统标识
-        ParentSystemDisplayText = GetParentSystemName(_parentSystemCode);
+        // 父系统在数据库中保存的是 ParentSystemCode；界面展示时再从已加载的目标数据中反查系统名称。
+        ParentSystemDisplayText = GetParentSystemName(_parentSystemCode, allTargets);
         IsTopSystemDisplayText = _isTopSystem ? "是" : "否";
     }
 
@@ -100,15 +100,56 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
     }
 
     /// <summary>
-    /// 
+    /// 根据父系统唯一标识，从目标模块已经加载的全部目标数据中查找父系统名称。
     /// </summary>
-    /// <param name="parentSystemCode"></param>
-    /// <returns></returns>
-    private static string GetParentSystemName(string parentSystemCode)
+    /// <remarks>
+    /// 数据库字段 ParentSystemCode 仍然保存唯一标识；这里只影响弹窗展示文本。
+    /// 找不到父系统时返回原始标识，便于发现数据库中可能存在的父子关系异常。
+    /// </remarks>
+    private static string GetParentSystemName(string parentSystemCode, IEnumerable<TargetInfoItem>? allTargets)
     {
-        return string.IsNullOrWhiteSpace(parentSystemCode) || parentSystemCode == "-1"
-            ? "无（顶系统）"
-            : parentSystemCode;
+        if (string.IsNullOrWhiteSpace(parentSystemCode) || parentSystemCode == "-1")
+        {
+            return "无（顶系统）";
+        }
+
+        TargetSystemInfoItem? parentSystem = allTargets?
+            .SelectMany(GetAllSystems)
+            .FirstOrDefault(system => string.Equals(system.SystemCode, parentSystemCode, StringComparison.Ordinal));
+
+        return string.IsNullOrWhiteSpace(parentSystem?.SystemName)
+            ? parentSystemCode
+            : parentSystem.SystemName;
+    }
+
+    /// <summary>
+    /// 展开一个目标下的全部系统，包括顶层系统和所有子系统。
+    /// </summary>
+    private static IEnumerable<TargetSystemInfoItem> GetAllSystems(TargetInfoItem target)
+    {
+        foreach (TargetSystemInfoItem system in target.Systems)
+        {
+            foreach (TargetSystemInfoItem nestedSystem in GetSelfAndChildSystems(system))
+            {
+                yield return nestedSystem;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 展开一个系统节点自身及其全部子系统。
+    /// </summary>
+    private static IEnumerable<TargetSystemInfoItem> GetSelfAndChildSystems(TargetSystemInfoItem system)
+    {
+        yield return system;
+
+        foreach (TargetSystemInfoItem childSystem in system.ChildSystems)
+        {
+            foreach (TargetSystemInfoItem nestedSystem in GetSelfAndChildSystems(childSystem))
+            {
+                yield return nestedSystem;
+            }
+        }
     }
 
     private static TargetSystemInfoItem CloneSystem(TargetSystemInfoItem source)

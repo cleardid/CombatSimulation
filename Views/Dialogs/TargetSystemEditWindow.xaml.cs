@@ -12,11 +12,11 @@ public partial class TargetSystemEditWindow : DialogWindowBase
 {
     private readonly TargetSystemEditDialogViewModel _viewModel;
 
-    public TargetSystemEditWindow(TargetSystemInfoItem system, bool isEditMode)
+    public TargetSystemEditWindow(TargetSystemInfoItem system, bool isEditMode, IEnumerable<TargetInfoItem>? allTargets = null)
     {
         InitializeComponent();
 
-        _viewModel = new TargetSystemEditDialogViewModel(system, isEditMode);
+        _viewModel = new TargetSystemEditDialogViewModel(system, isEditMode, allTargets);
         BindCloseRequest(_viewModel);
         DataContext = _viewModel;
     }
