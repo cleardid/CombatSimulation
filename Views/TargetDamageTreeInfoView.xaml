@@ -1,4 +1,4 @@
-<UserControl x:Class="CombatSimulation.Views.TargetDamageTreeInfoView"
+﻿<UserControl x:Class="CombatSimulation.Views.TargetDamageTreeInfoView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="clr-namespace:CombatSimulation.Models"
@@ -334,12 +334,40 @@
 
                     <Border Grid.Row="1" Margin="0,18,0,0" Background="#660F172A" BorderBrush="#334155" BorderThickness="1" Padding="14">
                         <!--
-                            右侧预览区改为代码动态绘制的 Grid。
-                            该结构与旧实现中的 DamageTreeShow 对齐：小树自适应填充，大树自动放入 ScrollViewer。
+                            毁伤树逻辑预览区。
+                            外层 ScrollViewer 固定在 XAML 中，避免代码动态嵌套 ScrollViewer 后横向滚动条测量异常。
+                            内层 DamageTreePreviewCanvas 用于提供稳定的滚动内容尺寸；DamageTreeShow 只负责承载事件框、逻辑门和连线。
+                            按住 Ctrl 后滚动鼠标滚轮，可以对整个预览图进行缩放。
                         -->
-                        <Grid x:Name="DamageTreeShow"
-                              ClipToBounds="True"
-                              SizeChanged="OnDamageTreeShowSizeChanged" />
+                        <ScrollViewer x:Name="DamageTreePreviewScrollViewer"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="False"
+                                      PanningMode="Both"
+                                      Background="Transparent"
+                                      ClipToBounds="True"
+                                      Focusable="True"
+                                      SizeChanged="OnDamageTreePreviewViewportSizeChanged"
+                                      PreviewMouseWheel="OnDamageTreePreviewMouseWheel">
+
+                            <!--修复右下角白色小方块。
+                                当横向和竖向滚动条同时出现时，ScrollViewer 会显示一个 corner 区域。
+                                默认 corner 使用系统 ControlBrush，在深色界面中会显示成白色或浅色。 -->
+                            <ScrollViewer.Resources>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}"
+                                                   Color="Transparent" />
+                            </ScrollViewer.Resources>
+                            
+                            <Grid x:Name="DamageTreePreviewCanvas"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Top"
+                                  ClipToBounds="False">
+                                <Grid x:Name="DamageTreeShow"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Top"
+                                      ClipToBounds="False" />
+                            </Grid>
+                        </ScrollViewer>
                     </Border>
                 </Grid>
             </Border>

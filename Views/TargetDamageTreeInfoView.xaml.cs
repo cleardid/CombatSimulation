@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -22,6 +23,12 @@ public partial class TargetDamageTreeInfoView : UserControl
     private DamageTreeNodeItem? _currentShow;
     private bool _previewRefreshQueued;
     private bool _pendingPreviewRefresh;
+
+    // 预览图缩放比例。使用 LayoutTransform 缩放滚动内容，使 ScrollViewer 的滚动范围随缩放同步更新。
+    private const double PreviewZoomMin = 0.25d;
+    private const double PreviewZoomMax = 4.0d;
+    private const double PreviewZoomStep = 1.1d;
+    private double _previewZoom = 1.0d;
 
     private readonly HashSet<DamageTreeNodeItem> _subscribedPreviewNodes = new();
     private readonly Dictionary<DamageTreeNodeItem, NotifyCollectionChangedEventHandler> _childrenCollectionHandlers = new();
@@ -51,10 +58,54 @@ public partial class TargetDamageTreeInfoView : UserControl
         QueueShowTree(refresh: true);
     }
 
-    private void OnDamageTreeShowSizeChanged(object sender, SizeChangedEventArgs e)
+    private void OnDamageTreePreviewViewportSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // 预览区尺寸变化会影响自适应/滚动绘制方式，因此需要强制重绘。
+        // 预览区尺寸变化会影响滚动内容尺寸，因此需要强制重绘。
         QueueShowTree(refresh: true);
+    }
+
+    private void OnDamageTreePreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // 普通滚轮仍然交给 ScrollViewer 做纵向滚动；只有按住 Ctrl 时才进行缩放。
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (DamageTreePreviewScrollViewer == null || DamageTreePreviewCanvas == null)
+        {
+            return;
+        }
+
+        double oldZoom = _previewZoom;
+        double zoomFactor = e.Delta > 0 ? PreviewZoomStep : 1d / PreviewZoomStep;
+        double newZoom = Math.Clamp(oldZoom * zoomFactor, PreviewZoomMin, PreviewZoomMax);
+        if (Math.Abs(newZoom - oldZoom) < 0.0001d)
+        {
+            return;
+        }
+
+        Point contentPoint = e.GetPosition(DamageTreePreviewCanvas);
+        Point viewportPoint = e.GetPosition(DamageTreePreviewScrollViewer);
+
+        _previewZoom = newZoom;
+        ApplyPreviewZoomTransform();
+
+        // 保持鼠标指向的逻辑位置尽量不变，缩放后不至于突然跳到左上角。
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                DamageTreePreviewCanvas.UpdateLayout();
+
+                double targetHorizontalOffset = contentPoint.X * newZoom - viewportPoint.X;
+                double targetVerticalOffset = contentPoint.Y * newZoom - viewportPoint.Y;
+
+                DamageTreePreviewScrollViewer.ScrollToHorizontalOffset(Math.Max(0d, targetHorizontalOffset));
+                DamageTreePreviewScrollViewer.ScrollToVerticalOffset(Math.Max(0d, targetVerticalOffset));
+            }),
+            DispatcherPriority.Background);
     }
 
     private void OnDamageTreeSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -255,9 +306,14 @@ public partial class TargetDamageTreeInfoView : UserControl
     /// <summary>
     /// 按旧版 DamageTreeShow 的方式绘制毁伤树预览：先把树转换为层级信息，再在 Grid 中放置事件框、逻辑门和连线。
     /// </summary>
-    private void ShowTree(bool? zoom = null, bool refresh = true)
+    private void ShowTree(bool refresh = true)
     {
-        if (DamageTreeShow == null || DamageTreeShow.ActualWidth <= 0 || DamageTreeShow.ActualHeight <= 0)
+        if (DamageTreePreviewScrollViewer == null || DamageTreePreviewCanvas == null || DamageTreeShow == null)
+        {
+            return;
+        }
+
+        if (DamageTreePreviewScrollViewer.ActualWidth <= 0 || DamageTreePreviewScrollViewer.ActualHeight <= 0)
         {
             return;
         }
@@ -300,41 +356,22 @@ public partial class TargetDamageTreeInfoView : UserControl
         List<double> rows = BuildPreviewRowWeights(infos);
         int columns = Math.Max(4, rootLayer.Sum(info => info.Include) * 2 + 2);
 
-        Grid drawGrid = DamageTreeShow;
-        if (zoom == null)
-        {
-            zoom = columns < 20 && rows.Count < 10;
-        }
+        double contentWidth = columns * unitWidth;
+        double contentHeight = rows.Sum() * unitHeight;
+        double viewportWidth = Math.Max(0d, DamageTreePreviewScrollViewer.ActualWidth - SystemParameters.VerticalScrollBarWidth);
 
-        if (zoom == true)
-        {
-            BuildFitGrid(drawGrid, columns, rows, ref unitWidth, ref unitHeight);
-        }
-        else
-        {
-            // 大树采用 ScrollViewer，避免为了强行压缩而导致事件框和逻辑门不可读。
-            ScrollViewer scrollViewer = new()
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                // 当树宽度小于可视区时让内容居中；树过宽时仍保持正常横向滚动。
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Top
-            };
-            DamageTreeShow.Children.Add(scrollViewer);
+        // Canvas 宽度至少等于可视区宽度。
+        // 内容小于可视区时，DamageTreeShow 通过 HorizontalAlignment=Center 居中；内容大于可视区时，横向滚动范围稳定存在。
+        DamageTreePreviewCanvas.Width = Math.Max(contentWidth, viewportWidth);
+        DamageTreePreviewCanvas.Height = contentHeight;
+        DamageTreeShow.Width = contentWidth;
+        DamageTreeShow.Height = contentHeight;
 
-            drawGrid = new Grid
-            {
-                // ScrollViewer 的 HorizontalContentAlignment 在部分模板下不会作用到内容，显式设置可保证小型毁伤树在滚动模式下仍居中。
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-            scrollViewer.Content = drawGrid;
-            BuildScrollableGrid(drawGrid, columns, rows, unitWidth, unitHeight);
-        }
+        BuildScrollableGrid(DamageTreeShow, columns, rows, unitWidth, unitHeight);
+        ApplyPreviewZoomTransform();
 
-        DrawPreviewNodes(drawGrid, infos, color, unitWidth, columns);
-        DrawPreviewLines(drawGrid, lineInfos, color);
+        DrawPreviewNodes(DamageTreeShow, infos, color, unitWidth, columns);
+        DrawPreviewLines(DamageTreeShow, lineInfos, color);
     }
 
     private void ClearDamageTreeShow()
@@ -342,6 +379,25 @@ public partial class TargetDamageTreeInfoView : UserControl
         DamageTreeShow.Children.Clear();
         DamageTreeShow.RowDefinitions.Clear();
         DamageTreeShow.ColumnDefinitions.Clear();
+        DamageTreeShow.Width = double.NaN;
+        DamageTreeShow.Height = double.NaN;
+
+        if (DamageTreePreviewCanvas != null)
+        {
+            DamageTreePreviewCanvas.Width = double.NaN;
+            DamageTreePreviewCanvas.Height = double.NaN;
+            ApplyPreviewZoomTransform();
+        }
+    }
+
+    private void ApplyPreviewZoomTransform()
+    {
+        if (DamageTreePreviewCanvas == null)
+        {
+            return;
+        }
+
+        DamageTreePreviewCanvas.LayoutTransform = new ScaleTransform(_previewZoom, _previewZoom);
     }
 
     private static List<double> BuildPreviewRowWeights(IReadOnlyDictionary<int, List<DamageTreeLayerInfo>> infos)
