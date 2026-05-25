@@ -328,9 +328,21 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="毁伤树逻辑预览图" FontSize="20" FontWeight="Bold" />
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="毁伤树逻辑预览图"
+                                   FontSize="20"
+                                   FontWeight="Bold" />
+                        <Button Grid.Column="1"
+                                Content="导出图片"
+                                Width="86"
+                                Style="{StaticResource DamageTreeTextActionButtonStyle}"
+                                Click="OnExportDamageTreeImageClicked" />
+                    </Grid>
 
                     <Border Grid.Row="1" Margin="0,18,0,0" Background="#660F172A" BorderBrush="#334155" BorderThickness="1" Padding="14">
                         <!--
@@ -362,10 +374,14 @@
                                   HorizontalAlignment="Left"
                                   VerticalAlignment="Top"
                                   ClipToBounds="False">
-                                <Grid x:Name="DamageTreeShow"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Top"
-                                      ClipToBounds="False" />
+                                <!--
+                                    预览图承载容器。
+                                    使用 Canvas 做绝对定位，仅调整节点坐标，不改变原有 EventRectangle / GateIcon / ConnectLine 的边框和文字样式。
+                                -->
+                                <Canvas x:Name="DamageTreeShow"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Top"
+                                        ClipToBounds="False" />
                             </Grid>
                         </ScrollViewer>
                     </Border>

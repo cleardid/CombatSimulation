@@ -1,13 +1,16 @@
 ﻿using CombatSimulation.Controls;
 using CombatSimulation.Models;
 using CombatSimulation.ViewModels;
+using Microsoft.Win32;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace CombatSimulation.Views;
@@ -367,18 +370,17 @@ public partial class TargetDamageTreeInfoView : UserControl
         DamageTreeShow.Width = contentWidth;
         DamageTreeShow.Height = contentHeight;
 
-        BuildScrollableGrid(DamageTreeShow, columns, rows, unitWidth, unitHeight);
         ApplyPreviewZoomTransform();
 
-        DrawPreviewNodes(DamageTreeShow, infos, color, unitWidth, columns);
-        DrawPreviewLines(DamageTreeShow, lineInfos, color);
+        double[] rowTops = BuildRowTops(rows, unitHeight);
+        DrawPreviewNodes(DamageTreeShow, infos, color, unitWidth, unitHeight, rows, rowTops);
+        DrawPreviewLines(DamageTreeShow, lineInfos, color, unitWidth, unitHeight, rows, rowTops);
     }
 
     private void ClearDamageTreeShow()
     {
         DamageTreeShow.Children.Clear();
-        DamageTreeShow.RowDefinitions.Clear();
-        DamageTreeShow.ColumnDefinitions.Clear();
+        // DamageTreeShow 使用 Canvas 绝对定位，清空子元素即可。
         DamageTreeShow.Width = double.NaN;
         DamageTreeShow.Height = double.NaN;
 
@@ -421,114 +423,207 @@ public partial class TargetDamageTreeInfoView : UserControl
         return rows;
     }
 
-    private void BuildFitGrid(Grid grid, int columns, IReadOnlyList<double> rows, ref double unitWidth, ref double unitHeight)
+    private void OnExportDamageTreeImageClicked(object sender, RoutedEventArgs e)
     {
-        foreach (int _ in Enumerable.Range(0, columns))
+        if (DamageTreeShow == null || DamageTreeShow.Children.Count == 0)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1d, GridUnitType.Star) });
+            MessageBox.Show("当前没有可导出的毁伤树预览图。", "导出图片", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
         }
 
-        if (DamageTreeShow.ActualWidth / columns < unitWidth)
+        // 导出前强制刷新一次，确保当前选中的毁伤树已经完整绘制。
+        ShowTree(refresh: true);
+        DamageTreeShow.UpdateLayout();
+
+        double width = DamageTreeShow.Width;
+        double height = DamageTreeShow.Height;
+        if (double.IsNaN(width) || width <= 0d || double.IsNaN(height) || height <= 0d)
         {
-            unitWidth = DamageTreeShow.ActualWidth / columns;
+            MessageBox.Show("当前毁伤树预览图尺寸无效，无法导出。", "导出图片", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
-        if (DamageTreeShow.ActualHeight / rows.Sum() < unitHeight)
+        SaveFileDialog dialog = new()
         {
-            unitHeight = DamageTreeShow.ActualHeight / rows.Sum();
+            Title = "导出毁伤树预览图",
+            Filter = "PNG 图片 (*.png)|*.png|JPEG 图片 (*.jpg;*.jpeg)|*.jpg;*.jpeg|BMP 图片 (*.bmp)|*.bmp|TIFF 图片 (*.tif;*.tiff)|*.tif;*.tiff",
+            FileName = $"{(_attachedViewModel?.SelectedDamageTree?.DisplayName ?? "DamageTree")}_逻辑预览图.png",
+            AddExtension = true,
+            DefaultExt = ".png",
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true)
+        {
+            return;
         }
 
-        if (unitWidth > unitHeight)
+        try
         {
-            unitWidth = unitHeight;
+            ExportDamageTreePreview(dialog.FileName, width, height);
         }
-        else if (unitWidth < unitHeight)
+        catch (Exception ex)
         {
-            unitHeight = unitWidth;
-        }
-
-        foreach (double row in rows)
-        {
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(row * unitHeight, GridUnitType.Pixel) });
+            MessageBox.Show($"导出毁伤树预览图失败：{ex.Message}", "导出图片", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private static void BuildScrollableGrid(Grid grid, int columns, IEnumerable<double> rows, double unitWidth, double unitHeight)
+    private void ExportDamageTreePreview(string fileName, double width, double height)
     {
-        foreach (int _ in Enumerable.Range(0, columns))
+        const double dpi = 96d;
+        int pixelWidth = Math.Max(1, (int)Math.Ceiling(width));
+        int pixelHeight = Math.Max(1, (int)Math.Ceiling(height));
+
+        DrawingVisual exportVisual = new();
+        using (DrawingContext drawingContext = exportVisual.RenderOpen())
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(unitWidth, GridUnitType.Pixel) });
+            // 导出完整逻辑图，而不是当前滚动窗口中的可视区域。
+            drawingContext.DrawRectangle(new SolidColorBrush(Color.FromRgb(15, 23, 42)), null, new Rect(0d, 0d, width, height));
+            drawingContext.DrawRectangle(new VisualBrush(DamageTreeShow), null, new Rect(0d, 0d, width, height));
         }
 
-        foreach (double row in rows)
-        {
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(row * unitHeight, GridUnitType.Pixel) });
-        }
+        RenderTargetBitmap bitmap = new(pixelWidth, pixelHeight, dpi, dpi, PixelFormats.Pbgra32);
+        bitmap.Render(exportVisual);
+
+        BitmapEncoder encoder = CreateBitmapEncoder(fileName);
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+
+        using FileStream stream = File.Create(fileName);
+        encoder.Save(stream);
     }
 
-    private static void DrawPreviewNodes(Grid grid, IReadOnlyDictionary<int, List<DamageTreeLayerInfo>> infos, Color color, double unitWidth, int totalColumns)
+    private static BitmapEncoder CreateBitmapEncoder(string fileName)
+    {
+        string extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => new JpegBitmapEncoder { QualityLevel = 95 },
+            ".bmp" => new BmpBitmapEncoder(),
+            ".tif" or ".tiff" => new TiffBitmapEncoder(),
+            _ => new PngBitmapEncoder()
+        };
+    }
+
+    private static double[] BuildRowTops(IReadOnlyList<double> rows, double unitHeight)
+    {
+        double[] rowTops = new double[rows.Count];
+        double currentTop = 0d;
+        for (int index = 0; index < rows.Count; index++)
+        {
+            rowTops[index] = currentTop;
+            currentTop += rows[index] * unitHeight;
+        }
+
+        return rowTops;
+    }
+
+    private static double GetNodeCenterX(double center, double unitWidth)
+    {
+        // 与旧版 Grid 布局保持同一套横向单位：左侧保留 1 个 unitWidth 的空列，
+        // 每个叶子节点占 2 个 unitWidth，节点中心位于叶子槽中心。
+        return (2d * center + 1d) * unitWidth;
+    }
+
+    private static void DrawPreviewNodes(
+        Canvas canvas,
+        IReadOnlyDictionary<int, List<DamageTreeLayerInfo>> infos,
+        Color color,
+        double unitWidth,
+        double unitHeight,
+        IReadOnlyList<double> rows,
+        IReadOnlyList<double> rowTops)
     {
         foreach (KeyValuePair<int, List<DamageTreeLayerInfo>> item in infos.OrderBy(item => item.Key))
         {
             foreach (DamageTreeLayerInfo info in item.Value)
             {
                 bool isRootLayer = item.Key == 1;
+                int nodeRow = isRootLayer ? 1 : item.Key * 3 - 2;
+                if (nodeRow < 0 || nodeRow >= rows.Count)
+                {
+                    continue;
+                }
+
+                double nodeWidth = isRootLayer ? (info.Content.Length + 2d) * unitWidth : unitWidth;
+                double nodeHeight = rows[nodeRow] * unitHeight;
+                double centerX = GetNodeCenterX(info.Center, unitWidth);
+
+                // 保持父节点位于其直接子节点组的中心，不再额外按内容区宽度二次居中。
+
                 EventRectangle rectangle = new()
                 {
                     Color = color,
                     Type = info.HaveUp ? (info.NextCount > 0 ? EventType.Middle : EventType.End) : EventType.Top,
                     Script = info.Content,
                     Vertical = !isRootLayer,
-                    Width = isRootLayer ? (info.Content.Length + 2d) * unitWidth : unitWidth,
-                    HorizontalAlignment = HorizontalAlignment.Center
+                    Width = nodeWidth,
+                    Height = nodeHeight
                 };
 
-                bool shouldCenterSingleRoot = isRootLayer && item.Value.Count == 1;
-                int column = shouldCenterSingleRoot ? 0 : info.Start * 2 + 1;
-                int columnSpan = shouldCenterSingleRoot ? Math.Max(1, totalColumns) : info.Include * 2;
-
-                grid.Children.Add(rectangle);
-                Grid.SetRow(rectangle, isRootLayer ? 1 : item.Key * 3 - 2);
-                Grid.SetColumn(rectangle, column);
-                Grid.SetColumnSpan(rectangle, columnSpan);
+                canvas.Children.Add(rectangle);
+                Canvas.SetLeft(rectangle, centerX - nodeWidth / 2d);
+                Canvas.SetTop(rectangle, rowTops[nodeRow]);
 
                 if (info.NextCount > 0)
                 {
+                    int gateRow = isRootLayer ? 2 : item.Key * 3 - 1;
+                    if (gateRow < 0 || gateRow >= rows.Count)
+                    {
+                        continue;
+                    }
+
                     GateIcon icon = new()
                     {
                         Color = color,
                         Type = info.NextCount < 2 ? -1 : info.Type,
                         Rate = info.Ratio,
                         Width = unitWidth,
-                        HorizontalAlignment = HorizontalAlignment.Center
+                        Height = rows[gateRow] * unitHeight
                     };
 
-                    grid.Children.Add(icon);
-                    Grid.SetRow(icon, isRootLayer ? 2 : item.Key * 3 - 1);
-                    Grid.SetColumn(icon, column);
-                    Grid.SetColumnSpan(icon, columnSpan);
+                    canvas.Children.Add(icon);
+                    Canvas.SetLeft(icon, centerX - unitWidth / 2d);
+                    Canvas.SetTop(icon, rowTops[gateRow]);
                 }
             }
         }
     }
 
-    private static void DrawPreviewLines(Grid grid, IReadOnlyDictionary<int, List<DamageTreeLayerLineInfo>> lineInfos, Color color)
+    private static void DrawPreviewLines(
+        Canvas canvas,
+        IReadOnlyDictionary<int, List<DamageTreeLayerLineInfo>> lineInfos,
+        Color color,
+        double unitWidth,
+        double unitHeight,
+        IReadOnlyList<double> rows,
+        IReadOnlyList<double> rowTops)
     {
         foreach (KeyValuePair<int, List<DamageTreeLayerLineInfo>> item in lineInfos.OrderBy(item => item.Key))
         {
             foreach (DamageTreeLayerLineInfo info in item.Value)
             {
+                int row = item.Key * 3;
+                if (row < 0 || row >= rows.Count)
+                {
+                    continue;
+                }
+
+                double left = (2d * info.Start + 1d) * unitWidth;
+                double width = Math.Max(unitWidth, info.Unit * 2d * unitWidth);
+
                 ConnectLine line = new()
                 {
                     Color = color,
                     Unit = info.Unit,
-                    Outs = info.Outs.ToArray()
+                    ParentOffset = (info.ParentCenter - info.Start) / Math.Max(1d, info.Unit),
+                    Outs = info.Outs.ToArray(),
+                    Width = width,
+                    Height = rows[row] * unitHeight
                 };
 
-                grid.Children.Add(line);
-                Grid.SetRow(line, item.Key * 3);
-                Grid.SetColumn(line, info.Start * 2 + 1);
-                Grid.SetColumnSpan(line, info.Unit * 2);
+                canvas.Children.Add(line);
+                Canvas.SetLeft(line, left);
+                Canvas.SetTop(line, rowTops[row]);
             }
         }
     }

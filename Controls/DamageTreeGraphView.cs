@@ -13,7 +13,7 @@ namespace CombatSimulation.Controls;
 /// </summary>
 /// <remarks>
 /// 左侧 TreeView 用于编辑节点，本控件只负责把同一批 DamageTreeNodeItem 绘制成“方框 + 连线 + 逻辑门”的结构图。
-/// 这样可以避免右侧预览区再次显示成 TreeView，同时节点变化后通过集合/属性订阅自动重绘。
+/// 布局规则为：叶节点按固定间距排列；非叶父节点横向位置取首个子节点和末个子节点中心点的中点。
 /// </remarks>
 public sealed class DamageTreeGraphView : FrameworkElement
 {
@@ -24,7 +24,8 @@ public sealed class DamageTreeGraphView : FrameworkElement
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure, OnRootNodesChanged));
 
     private const double HorizontalGap = 34d;
-    private const double LevelGap = 132d;
+    private const double LeafPitch = VerticalNodeWidth + HorizontalGap;
+    private const double LevelConnectorGap = 78d;
     private const double TopMargin = 20d;
     private const double LeftMargin = 20d;
     private const double RightMargin = 20d;
@@ -160,7 +161,10 @@ public sealed class DamageTreeGraphView : FrameworkElement
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(DamageTreeNodeItem.NodeName) or nameof(DamageTreeNodeItem.RelationType) or nameof(DamageTreeNodeItem.VoteThreshold))
+        if (e.PropertyName is nameof(DamageTreeNodeItem.NodeName)
+            or nameof(DamageTreeNodeItem.RelationType)
+            or nameof(DamageTreeNodeItem.VoteThreshold)
+            or nameof(DamageTreeNodeItem.SortOrder))
         {
             InvalidateMeasure();
             InvalidateVisual();
@@ -186,6 +190,7 @@ public sealed class DamageTreeGraphView : FrameworkElement
     private void UpdateLayoutTree()
     {
         List<LayoutNode> roots = EnumerateCurrentRootNodes()
+            .OrderBy(node => node.SortOrder)
             .Select(node => BuildLayout(node, depth: 0))
             .ToList();
 
@@ -196,59 +201,156 @@ public sealed class DamageTreeGraphView : FrameworkElement
             return;
         }
 
-        double totalWidth = roots.Sum(root => root.SubtreeWidth) + HorizontalGap * Math.Max(0, roots.Count - 1);
-        double startX = LeftMargin;
-        double maxBottom = TopMargin;
+        Dictionary<int, double> levelTops = BuildLevelTops(roots);
+        double nextLeafCenterX = LeftMargin + VerticalNodeWidth / 2d;
+        double nextRootLeft = LeftMargin;
+        GraphBounds graphBounds = GraphBounds.Empty;
+
         foreach (LayoutNode root in roots)
         {
-            AssignPositions(root, startX, TopMargin);
-            startX += root.SubtreeWidth + HorizontalGap;
-            maxBottom = Math.Max(maxBottom, GetMaxBottom(root));
+            AssignHorizontalPositions(root, ref nextLeafCenterX);
+            ApplyLevelTops(root, levelTops);
+
+            GraphBounds rootBounds = GetBounds(root);
+            double offsetX = Math.Max(0d, nextRootLeft - rootBounds.Left);
+            if (offsetX > 0d)
+            {
+                MoveLayout(root, offsetX);
+                nextLeafCenterX += offsetX;
+                rootBounds = GetBounds(root);
+            }
+
+            graphBounds = graphBounds.Include(rootBounds);
+            nextRootLeft = rootBounds.Right + HorizontalGap;
+            nextLeafCenterX = Math.Max(nextLeafCenterX, nextRootLeft + VerticalNodeWidth / 2d);
+        }
+
+        double offsetToMargin = Math.Max(0d, LeftMargin - graphBounds.Left);
+        if (offsetToMargin > 0d)
+        {
+            foreach (LayoutNode root in roots)
+            {
+                MoveLayout(root, offsetToMargin);
+            }
+
+            graphBounds = GraphBounds.Empty;
+            foreach (LayoutNode root in roots)
+            {
+                graphBounds = graphBounds.Include(GetBounds(root));
+            }
         }
 
         _layoutRoots = roots.ToArray();
-        _desiredGraphSize = new Size(Math.Max(420d, totalWidth + LeftMargin + RightMargin), Math.Max(260d, maxBottom + BottomMargin));
+        _desiredGraphSize = new Size(
+            Math.Max(420d, graphBounds.Right + RightMargin),
+            Math.Max(260d, graphBounds.Bottom + BottomMargin));
     }
 
     private static LayoutNode BuildLayout(DamageTreeNodeItem node, int depth)
     {
         Size nodeSize = GetNodeSize(node, depth);
         LayoutNode layout = new(node, depth, nodeSize.Width, nodeSize.Height);
-        foreach (DamageTreeNodeItem child in node.Children)
+        foreach (DamageTreeNodeItem child in node.Children.OrderBy(child => child.SortOrder))
         {
             layout.Children.Add(BuildLayout(child, depth + 1));
-        }
-
-        if (layout.Children.Count == 0)
-        {
-            layout.SubtreeWidth = nodeSize.Width;
-        }
-        else
-        {
-            double childrenWidth = layout.Children.Sum(child => child.SubtreeWidth) + HorizontalGap * (layout.Children.Count - 1);
-            layout.SubtreeWidth = Math.Max(nodeSize.Width, childrenWidth);
         }
 
         return layout;
     }
 
-    private static void AssignPositions(LayoutNode layout, double left, double top)
+    private static Dictionary<int, double> BuildLevelTops(IEnumerable<LayoutNode> roots)
     {
-        layout.CenterX = left + layout.SubtreeWidth / 2d;
-        layout.Top = top + layout.Depth * LevelGap;
+        Dictionary<int, double> maxHeightByDepth = new();
+        foreach (LayoutNode root in roots)
+        {
+            CollectMaxHeightByDepth(root, maxHeightByDepth);
+        }
 
+        Dictionary<int, double> levelTops = new() { [0] = TopMargin };
+        int maxDepth = maxHeightByDepth.Keys.Max();
+        for (int depth = 1; depth <= maxDepth; depth++)
+        {
+            double previousTop = levelTops[depth - 1];
+            double previousHeight = maxHeightByDepth.TryGetValue(depth - 1, out double height)
+                ? height
+                : VerticalNodeMinHeight;
+            levelTops[depth] = previousTop + previousHeight + LevelConnectorGap;
+        }
+
+        return levelTops;
+    }
+
+    private static void CollectMaxHeightByDepth(LayoutNode layout, IDictionary<int, double> maxHeightByDepth)
+    {
+        if (!maxHeightByDepth.TryGetValue(layout.Depth, out double current) || layout.Height > current)
+        {
+            maxHeightByDepth[layout.Depth] = layout.Height;
+        }
+
+        foreach (LayoutNode child in layout.Children)
+        {
+            CollectMaxHeightByDepth(child, maxHeightByDepth);
+        }
+    }
+
+    private static void AssignHorizontalPositions(LayoutNode layout, ref double nextLeafCenterX)
+    {
         if (layout.Children.Count == 0)
         {
+            layout.CenterX = nextLeafCenterX;
+            nextLeafCenterX += LeafPitch;
             return;
         }
 
-        double childrenWidth = layout.Children.Sum(child => child.SubtreeWidth) + HorizontalGap * (layout.Children.Count - 1);
-        double childLeft = left + (layout.SubtreeWidth - childrenWidth) / 2d;
         foreach (LayoutNode child in layout.Children)
         {
-            AssignPositions(child, childLeft, top);
-            childLeft += child.SubtreeWidth + HorizontalGap;
+            AssignHorizontalPositions(child, ref nextLeafCenterX);
         }
+
+        // 关键：父节点放在首、末子节点中心点的中点，而不是放在整个子树矩形宽度中心。
+        // 当某个子节点自身拥有更宽的子树时，这可以避免父节点被宽子树拖偏。
+        layout.CenterX = (layout.Children.First().CenterX + layout.Children.Last().CenterX) / 2d;
+    }
+
+    private static void ApplyLevelTops(LayoutNode layout, IReadOnlyDictionary<int, double> levelTops)
+    {
+        layout.Top = levelTops.TryGetValue(layout.Depth, out double top) ? top : TopMargin;
+        foreach (LayoutNode child in layout.Children)
+        {
+            ApplyLevelTops(child, levelTops);
+        }
+    }
+
+    private static void MoveLayout(LayoutNode layout, double offsetX)
+    {
+        layout.CenterX += offsetX;
+        foreach (LayoutNode child in layout.Children)
+        {
+            MoveLayout(child, offsetX);
+        }
+    }
+
+    private static GraphBounds GetBounds(LayoutNode layout)
+    {
+        GraphBounds bounds = GraphBounds.FromRect(layout.NodeRect);
+
+        if (layout.Children.Count > 0)
+        {
+            Point parentBottom = layout.BottomCenter;
+            double gateCenterY = parentBottom.Y + 28d;
+            double branchY = gateCenterY + 30d;
+            bounds = bounds.Include(new Rect(layout.CenterX - GateSize / 2d, gateCenterY - GateSize / 2d, GateSize, GateSize));
+            bounds = bounds.Include(new Point(layout.CenterX, branchY));
+            bounds = bounds.Include(new Point(layout.Children.First().CenterX, branchY));
+            bounds = bounds.Include(new Point(layout.Children.Last().CenterX, branchY));
+        }
+
+        foreach (LayoutNode child in layout.Children)
+        {
+            bounds = bounds.Include(GetBounds(child));
+        }
+
+        return bounds;
     }
 
     private static Size GetNodeSize(DamageTreeNodeItem node, int depth)
@@ -262,17 +364,6 @@ public sealed class DamageTreeGraphView : FrameworkElement
         int verticalTextLength = Math.Max(4, node.NodeName?.Trim().Length ?? 0);
         double height = Math.Clamp(verticalTextLength * 18d + 18d, VerticalNodeMinHeight, VerticalNodeMaxHeight);
         return new Size(VerticalNodeWidth, height);
-    }
-
-    private static double GetMaxBottom(LayoutNode layout)
-    {
-        double maxBottom = layout.Top + layout.Height;
-        foreach (LayoutNode child in layout.Children)
-        {
-            maxBottom = Math.Max(maxBottom, GetMaxBottom(child));
-        }
-
-        return maxBottom;
     }
 
     private static void DrawConnectors(DrawingContext drawingContext, LayoutNode layout)
@@ -334,7 +425,7 @@ public sealed class DamageTreeGraphView : FrameworkElement
     {
         return node.RelationType switch
         {
-            DamageNodeRelationType.And => "＋",
+            DamageNodeRelationType.And => "+",
             DamageNodeRelationType.Or => "或",
             DamageNodeRelationType.Vote => node.VoteThreshold.ToString("0.###", CultureInfo.CurrentCulture),
             _ => "-"
@@ -389,8 +480,6 @@ public sealed class DamageTreeGraphView : FrameworkElement
 
         public double Height { get; }
 
-        public double SubtreeWidth { get; set; }
-
         public double CenterX { get; set; }
 
         public double Top { get; set; }
@@ -402,5 +491,39 @@ public sealed class DamageTreeGraphView : FrameworkElement
         public Point TopCenter => new(CenterX, Top);
 
         public Point BottomCenter => new(CenterX, Top + Height);
+    }
+
+    private readonly record struct GraphBounds(double Left, double Top, double Right, double Bottom)
+    {
+        public static GraphBounds Empty => new(double.PositiveInfinity, double.PositiveInfinity, double.NegativeInfinity, double.NegativeInfinity);
+
+        public static GraphBounds FromRect(Rect rect) => new(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+        public GraphBounds Include(GraphBounds other)
+        {
+            if (double.IsPositiveInfinity(Left))
+            {
+                return other;
+            }
+
+            if (double.IsPositiveInfinity(other.Left))
+            {
+                return this;
+            }
+
+            return new GraphBounds(
+                Math.Min(Left, other.Left),
+                Math.Min(Top, other.Top),
+                Math.Max(Right, other.Right),
+                Math.Max(Bottom, other.Bottom));
+        }
+
+        public GraphBounds Include(Rect rect) => Include(FromRect(rect));
+
+        public GraphBounds Include(Point point)
+        {
+            GraphBounds pointBounds = new(point.X, point.Y, point.X, point.Y);
+            return Include(pointBounds);
+        }
     }
 }

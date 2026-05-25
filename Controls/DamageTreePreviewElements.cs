@@ -175,6 +175,12 @@ public sealed class ConnectLine : FrameworkElement
 
     public int Unit { get; set; } = 1;
 
+    /// <summary>
+    /// 父节点中心点在当前连线区域内的相对位置，取值范围通常为 0~1。
+    /// 旧实现固定使用 0.5，会导致宽度不一致的子树下父节点略微偏移。
+    /// </summary>
+    public double ParentOffset { get; set; } = 0.5d;
+
     public double[] Outs { get; set; } = Array.Empty<double>();
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -187,7 +193,7 @@ public sealed class ConnectLine : FrameworkElement
         }
 
         Pen pen = EventRectangle.CreatePen(Color);
-        double parentX = ActualWidth / 2d;
+        double parentX = Math.Clamp(ParentOffset, 0d, 1d) * ActualWidth;
         double branchY = Math.Max(1d, ActualHeight * 0.42d);
         double[] childXs = Outs.Select(offset => Math.Clamp(offset / Unit, 0d, 1d) * ActualWidth).ToArray();
 
@@ -243,21 +249,29 @@ internal static class DamageTreeLayerLayout
 
         int nodeStart;
         int include;
+        double center;
         if (childLayouts.Count == 0)
         {
             nodeStart = cursor++;
             include = 1;
+            center = nodeStart + 0.5d;
         }
         else
         {
             nodeStart = childLayouts.Min(child => child.Start);
-            include = childLayouts.Sum(child => child.Include);
+            int nodeEnd = childLayouts.Max(child => child.Start + child.Include);
+            include = Math.Max(1, nodeEnd - nodeStart);
+
+            // 父节点横向位置取首个子节点中心与末个子节点中心的中点。
+            // 这样在左右两侧子树宽度不同的情况下，父节点仍然位于其直接子节点组的视觉中心。
+            center = (childLayouts.First().Center + childLayouts.Last().Center) / 2d;
         }
 
         AddLayerInfo(layerInfos, layer, new DamageTreeLayerInfo
         {
             Start = nodeStart,
             Include = Math.Max(1, include),
+            Center = center,
             Content = string.IsNullOrWhiteSpace(node.NodeName) ? "未命名" : node.NodeName.Trim(),
             HaveUp = layer > 1,
             NextCount = childLayouts.Count,
@@ -271,13 +285,14 @@ internal static class DamageTreeLayerLayout
             {
                 Start = nodeStart,
                 Unit = Math.Max(1, include),
+                ParentCenter = center,
                 Outs = childLayouts
-                    .Select(child => child.Start - nodeStart + child.Include / 2d)
+                    .Select(child => child.Center - nodeStart)
                     .ToList()
             });
         }
 
-        return new DamageTreeNodeLayout(nodeStart, Math.Max(1, include));
+        return new DamageTreeNodeLayout(nodeStart, Math.Max(1, include), center);
     }
 
     private static void AddLayerInfo(IDictionary<int, List<DamageTreeLayerInfo>> layerInfos, int layer, DamageTreeLayerInfo info)
@@ -302,7 +317,7 @@ internal static class DamageTreeLayerLayout
         values.Add(info);
     }
 
-    private sealed record DamageTreeNodeLayout(int Start, int Include);
+    private sealed record DamageTreeNodeLayout(int Start, int Include, double Center);
 }
 
 internal sealed class DamageTreeLayerInfo
@@ -310,6 +325,11 @@ internal sealed class DamageTreeLayerInfo
     public int Start { get; init; }
 
     public int Include { get; init; }
+
+    /// <summary>
+    /// 节点中心点，单位为叶子节点跨度。
+    /// </summary>
+    public double Center { get; init; }
 
     public string Content { get; init; } = string.Empty;
 
@@ -327,6 +347,11 @@ internal sealed class DamageTreeLayerLineInfo
     public int Start { get; init; }
 
     public int Unit { get; init; }
+
+    /// <summary>
+    /// 父节点中心点，单位为叶子节点跨度。
+    /// </summary>
+    public double ParentCenter { get; init; }
 
     public List<double> Outs { get; init; } = new();
 }
