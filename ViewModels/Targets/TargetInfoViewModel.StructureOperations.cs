@@ -64,18 +64,18 @@ public sealed partial class TargetInfoViewModel
     /// <summary>
     /// 添加顶层系统或子系统，并同步数据库、本地模型和结构树节点。
     /// </summary>
-    public Task<bool> AddChildSystemAsync(TargetStructureTreeNode parentNode, TargetSystemInfoItem newSystem)
+    public async Task<bool> AddChildSystemAsync(TargetStructureTreeNode parentNode, TargetSystemInfoItem newSystem)
     {
         if (SelectedTarget == null || (parentNode.System == null && parentNode.Target == null))
         {
             StatusText = "请选择目标根节点或系统节点后再添加子系统";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (IsSystemCodeUsed(newSystem.SystemCode, except: null))
         {
             StatusText = $"系统唯一标识已存在：{newSystem.SystemCode}";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -87,7 +87,8 @@ public sealed partial class TargetInfoViewModel
             newSystem.TargetCode = SelectedTarget.Code;
 
             // 先写数据库。数据库成功后再修改内存和界面，避免界面出现未持久化的数据。
-            _targetInfoRepository.AddSystem(SelectedTarget.Code, newSystem);
+            string targetCode = SelectedTarget.Code;
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddSystem(targetCode, newSystem));
 
             if (isTopSystem)
             {
@@ -109,31 +110,31 @@ public sealed partial class TargetInfoViewModel
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
 
             StatusText = isTopSystem ? $"已添加顶层系统：{newSystem.SystemName}" : $"已添加子系统：{newSystem.SystemName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"添加子系统失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 添加子系统失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 添加底层部件，并同步数据库、本地模型、结构树节点和 Unity 显示部件集合。
     /// </summary>
-    public Task<bool> AddChildPartAsync(TargetStructureTreeNode parentNode, TargetPartInfoItem newPart)
+    public async Task<bool> AddChildPartAsync(TargetStructureTreeNode parentNode, TargetPartInfoItem newPart)
     {
         if (SelectedTarget == null || parentNode.System == null)
         {
             StatusText = "请选择系统节点后再添加底层部件";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (IsPartCodeUsed(newPart.PartCode, except: null))
         {
             StatusText = $"部件唯一标识已存在：{newPart.PartCode}";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -142,7 +143,8 @@ public sealed partial class TargetInfoViewModel
             newPart.SystemCode = parentSystem.SystemCode;
 
             // 先写数据库，避免本地树节点已经添加但数据库保存失败。
-            _targetInfoRepository.AddPart(SelectedTarget.Code, newPart);
+            string targetCode = SelectedTarget.Code;
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddPart(targetCode, newPart));
 
             parentSystem.Parts.Add(newPart);
             TargetStructureTreeNode newNode = TargetStructureTreeNode.ForPart(newPart);
@@ -156,38 +158,38 @@ public sealed partial class TargetInfoViewModel
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
 
             StatusText = $"已添加底层部件：{newPart.PartName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"添加底层部件失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 添加底层部件失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 修改系统信息，并在系统编号变化时同步修正子系统和部件外键。
     /// </summary>
-    public Task<bool> UpdateSystemAsync(TargetStructureTreeNode node, TargetSystemInfoItem editedSystem)
+    public async Task<bool> UpdateSystemAsync(TargetStructureTreeNode node, TargetSystemInfoItem editedSystem)
     {
         if (SelectedTarget == null)
         {
             StatusText = "未选择目标，不能修改系统信息";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (node.System == null)
         {
             StatusText = "当前节点不是系统节点，不能修改系统信息";
-            return Task.FromResult(false);
+            return false;
         }
 
         TargetSystemInfoItem system = node.System;
         if (IsSystemCodeUsed(editedSystem.SystemCode, system))
         {
             StatusText = $"系统唯一标识已存在：{editedSystem.SystemCode}";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -195,7 +197,8 @@ public sealed partial class TargetInfoViewModel
             string oldSystemCode = system.SystemCode;
 
             // 仓储层负责同步数据库中的子系统 ParentCode 和部件 SystemCode。
-            _targetInfoRepository.UpdateSystem(SelectedTarget.Code, oldSystemCode, editedSystem);
+            string targetCode = SelectedTarget.Code;
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateSystem(targetCode, oldSystemCode, editedSystem));
 
             // 数据库成功后再覆盖当前内存对象。这样 TreeView 绑定对象不会被整体替换。
             system.SystemName = editedSystem.SystemName;
@@ -229,13 +232,13 @@ public sealed partial class TargetInfoViewModel
             RefreshSelectedDetailRows(node);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
             StatusText = $"已修改系统：{system.SystemName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"修改系统失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 修改系统失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
@@ -273,7 +276,8 @@ public sealed partial class TargetInfoViewModel
             await _unityCommandService.UpdateTargetPartAsync(unityPartData).ConfigureAwait(true);
 
             // Unity 已确认修改成功后，才允许持久化数据库，避免 Unity 和 MySQL 状态不一致。
-            _targetInfoRepository.UpdatePart(SelectedTarget.Code, oldPartCode, editedPart);
+            string targetCode = SelectedTarget.Code;
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdatePart(targetCode, oldPartCode, editedPart));
 
             // 不替换 part 实例，直接复制属性。这样 TreeView、详情面板、弹窗引用都能继续使用同一对象。
             ApplyPartUpdate(part, editedPart);
@@ -338,12 +342,12 @@ public sealed partial class TargetInfoViewModel
     /// <summary>
     /// 删除结构树中的系统节点或部件节点，并同步数据库和 Unity 显示状态。
     /// </summary>
-    public Task<bool> DeleteStructureNodeAsync(TargetStructureTreeNode node)
+    public async Task<bool> DeleteStructureNodeAsync(TargetStructureTreeNode node)
     {
         if (SelectedTarget == null)
         {
             StatusText = "未选择目标，无法删除结构节点";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -354,19 +358,22 @@ public sealed partial class TargetInfoViewModel
                 if (parentNode?.System == null)
                 {
                     StatusText = "未找到部件所属系统，删除失败";
-                    return Task.FromResult(false);
+                    return false;
                 }
 
-                // 删除前解绑勾选事件，防止节点移除过程中触发无效 Unity 同步。
+                string targetCode = SelectedTarget.Code;
+                string partCode = node.Part.PartCode;
+                await RunRepositoryOperationAsync(() => _targetInfoRepository.DeletePart(targetCode, partCode));
+
+                // 数据库删除成功后再解绑勾选事件，防止节点移除过程中触发无效 Unity 同步。
                 DetachCheckStateHandler(node);
-                _targetInfoRepository.DeletePart(SelectedTarget.Code, node.Part.PartCode);
                 parentNode.System.Parts.Remove(node.Part);
                 parentNode.Children.Remove(node);
                 SelectStructureNode(parentNode);
                 ScheduleCheckedPartUnitySync();
                 NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
                 StatusText = $"已删除部件：{node.Name}";
-                return Task.FromResult(true);
+                return true;
             }
 
             if (node.System != null)
@@ -374,12 +381,15 @@ public sealed partial class TargetInfoViewModel
                 if (parentNode == null)
                 {
                     StatusText = "不能直接删除目标根节点";
-                    return Task.FromResult(false);
+                    return false;
                 }
 
                 // 删除系统会连带删除其子系统和部件。仓储层负责数据库级联，本地树负责移除根节点即可。
+                string targetCode = SelectedTarget.Code;
+                string systemCode = node.System.SystemCode;
+                await RunRepositoryOperationAsync(() => _targetInfoRepository.DeleteSystem(targetCode, systemCode));
+
                 DetachCheckStateHandler(node);
-                _targetInfoRepository.DeleteSystem(SelectedTarget.Code, node.System.SystemCode);
 
                 if (parentNode.Target != null)
                 {
@@ -395,17 +405,17 @@ public sealed partial class TargetInfoViewModel
                 ScheduleCheckedPartUnitySync();
                 NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
                 StatusText = $"已删除系统：{node.Name}";
-                return Task.FromResult(true);
+                return true;
             }
 
             StatusText = "不能删除目标根节点";
-            return Task.FromResult(false);
+            return false;
         }
         catch (Exception ex)
         {
             StatusText = $"删除结构节点失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 删除结构节点失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 }

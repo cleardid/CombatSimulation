@@ -199,50 +199,52 @@ public sealed partial class TargetInfoViewModel
     /// <summary>
     /// 新增毁伤树，并同步数据库和界面集合。
     /// </summary>
-    public Task<bool> AddDamageTreeAsync(DamageTreeInfoItem newTree)
+    public async Task<bool> AddDamageTreeAsync(DamageTreeInfoItem newTree)
     {
         if (!NormalizeAndValidateDamageTree(newTree, except: null))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
-            _damageTreeRepository.AddDamageTree(newTree);
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddDamageTree(newTree));
             DamageTrees.Add(newTree);
             SelectedDamageTree = newTree;
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已添加毁伤树：{newTree.DisplayName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"添加毁伤树失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 添加毁伤树失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 修改毁伤树基础信息和根节点名称。
     /// </summary>
-    public Task<bool> UpdateDamageTreeAsync(DamageTreeInfoItem originalTree, DamageTreeInfoItem editedTree)
+    public async Task<bool> UpdateDamageTreeAsync(DamageTreeInfoItem originalTree, DamageTreeInfoItem editedTree)
     {
         if (!DamageTrees.Contains(originalTree))
         {
             StatusText = "当前毁伤树不存在，无法修改";
-            return Task.FromResult(false);
+            return false;
         }
 
         editedTree.DamageTreeCode = originalTree.DamageTreeCode;
         editedTree.TargetCode = originalTree.TargetCode;
         if (!NormalizeAndValidateDamageTree(editedTree, except: originalTree))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateDamageTree(editedTree));
+
             originalTree.DamageTreeName = editedTree.DamageTreeName;
             originalTree.DamageTreeDescription = editedTree.DamageTreeDescription;
             originalTree.DamageLevelInfo = editedTree.DamageLevelInfo;
@@ -255,69 +257,68 @@ public sealed partial class TargetInfoViewModel
                 originalTree.RootNodes[0].NodeDescription = editedTree.RootNodes[0].NodeDescription;
             }
 
-            _damageTreeRepository.UpdateDamageTree(originalTree);
             SelectedDamageTree = originalTree;
             RefreshDamageNodeDetailRows(SelectedDamageTreeNode);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已修改毁伤树：{originalTree.DisplayName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"修改毁伤树失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 修改毁伤树失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 删除毁伤树及其所有节点。
     /// </summary>
-    public Task<bool> DeleteDamageTreeAsync(DamageTreeInfoItem tree)
+    public async Task<bool> DeleteDamageTreeAsync(DamageTreeInfoItem tree)
     {
         if (!DamageTrees.Contains(tree))
         {
             StatusText = "当前毁伤树不存在，无法删除";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
-            _damageTreeRepository.DeleteDamageTree(tree.DamageTreeCode);
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteDamageTree(tree.DamageTreeCode));
             DamageTrees.Remove(tree);
             SelectedDamageTree = DamageTrees.FirstOrDefault();
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已删除毁伤树：{tree.DisplayName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"删除毁伤树失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 删除毁伤树失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 新增中间节点或叶子节点。
     /// </summary>
-    public Task<bool> AddDamageNodeAsync(DamageTreeNodeItem parentNode, DamageTreeNodeItem newNode)
+    public async Task<bool> AddDamageNodeAsync(DamageTreeNodeItem parentNode, DamageTreeNodeItem newNode)
     {
         if (SelectedDamageTree == null)
         {
             StatusText = "请先选择毁伤树";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (parentNode.IsLeafNode)
         {
             StatusText = "叶子节点不能继续添加子节点";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (!NormalizeAndValidateDamageNode(newNode, except: null))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -326,32 +327,32 @@ public sealed partial class TargetInfoViewModel
             newNode.ParentNodeCode = parentNode.NodeCode;
             newNode.SortOrder = parentNode.Children.Count;
 
-            _damageTreeRepository.AddNode(newNode);
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddNode(newNode));
             parentNode.Children.Add(newNode);
             parentNode.IsExpanded = true;
             SelectDamageTreeNode(newNode);
             RefreshDamageNodeDetailRows(newNode);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已添加毁伤节点：{newNode.NodeName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"添加毁伤节点失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 添加毁伤节点失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 修改毁伤节点。
     /// </summary>
-    public Task<bool> UpdateDamageNodeAsync(DamageTreeNodeItem originalNode, DamageTreeNodeItem editedNode)
+    public async Task<bool> UpdateDamageNodeAsync(DamageTreeNodeItem originalNode, DamageTreeNodeItem editedNode)
     {
         if (SelectedDamageTree == null)
         {
             StatusText = "请先选择毁伤树";
-            return Task.FromResult(false);
+            return false;
         }
 
         editedNode.NodeCode = originalNode.NodeCode;
@@ -361,59 +362,61 @@ public sealed partial class TargetInfoViewModel
 
         if (!NormalizeAndValidateDamageNode(editedNode, except: originalNode))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
-            _damageTreeRepository.UpdateNode(originalNode.NodeCode, editedNode);
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateNode(originalNode.NodeCode, editedNode));
             ApplyDamageNodeUpdate(originalNode, editedNode);
             SelectDamageTreeNode(originalNode);
             RefreshDamageNodeDetailRows(originalNode);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已修改毁伤节点：{originalNode.NodeName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"修改毁伤节点失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 修改毁伤节点失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 删除毁伤节点及其子节点。
     /// </summary>
-    public Task<bool> DeleteDamageNodeAsync(DamageTreeNodeItem node)
+    public async Task<bool> DeleteDamageNodeAsync(DamageTreeNodeItem node)
     {
         if (SelectedDamageTree == null)
         {
             StatusText = "请先选择毁伤树";
-            return Task.FromResult(false);
+            return false;
         }
 
         if (node.Parent == null)
         {
             StatusText = "不能直接删除毁伤树根节点。如需删除，请删除整棵毁伤树。";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
             DamageTreeNodeItem parent = node.Parent;
-            _damageTreeRepository.DeleteNode(SelectedDamageTree.DamageTreeCode, node.NodeCode);
+            string damageTreeCode = SelectedDamageTree.DamageTreeCode;
+            string nodeCode = node.NodeCode;
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteNode(damageTreeCode, nodeCode));
             parent.Children.Remove(node);
             SelectDamageTreeNode(parent);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
             StatusText = $"已删除毁伤节点：{node.NodeName}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"删除毁伤节点失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 删除毁伤节点失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 

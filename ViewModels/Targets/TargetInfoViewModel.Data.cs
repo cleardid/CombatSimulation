@@ -53,6 +53,22 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
+    /// 在后台线程串行执行数据库写操作，避免阻塞 WPF UI 线程并减少仓储实例并发访问。
+    /// </summary>
+    private async Task RunRepositoryOperationAsync(Action operation)
+    {
+        await _repositoryOperationLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.Run(operation).ConfigureAwait(false);
+        }
+        finally
+        {
+            _repositoryOperationLock.Release();
+        }
+    }
+
+    /// <summary>
     /// 判断当前选中目标是否仍在当前筛选结果中。
     /// </summary>
     private bool IsSelectedTargetInCurrentFilter()

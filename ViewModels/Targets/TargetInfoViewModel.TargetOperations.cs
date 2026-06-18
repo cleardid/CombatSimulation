@@ -22,13 +22,13 @@ public sealed partial class TargetInfoViewModel
     /// <summary>
     /// 新增目标，并同步数据库、目标列表和类型筛选列表。
     /// </summary>
-    public Task<bool> AddTargetAsync(TargetInfoItem newTarget)
+    public async Task<bool> AddTargetAsync(TargetInfoItem newTarget)
     {
         NormalizeTarget(newTarget);
 
         if (!ValidateTarget(newTarget, except: null))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
@@ -37,7 +37,7 @@ public sealed partial class TargetInfoViewModel
             EnsureTargetStructureTree(newTarget);
 
             // 先写数据库，保存成功后再加入界面集合。
-            _targetInfoRepository.AddTarget(newTarget);
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddTarget(newTarget));
 
             Targets.Add(newTarget);
             RebuildTargetCategories();
@@ -50,25 +50,25 @@ public sealed partial class TargetInfoViewModel
             // 选中项已切换到新增目标后再捕获 Unity 显示状态，避免快照完成后恢复到旧目标。
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
             StatusText = $"已添加目标：{newTarget.Name}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"添加目标失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 添加目标失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 修改目标基础信息。
     /// </summary>
-    public Task<bool> UpdateTargetAsync(TargetInfoItem target, TargetInfoItem editedTarget)
+    public async Task<bool> UpdateTargetAsync(TargetInfoItem target, TargetInfoItem editedTarget)
     {
         if (!Targets.Contains(target))
         {
             StatusText = "当前目标不存在，无法修改";
-            return Task.FromResult(false);
+            return false;
         }
 
         // 目标唯一标识不允许通过基础信息弹窗修改，避免影响系统和部件外键。
@@ -77,17 +77,17 @@ public sealed partial class TargetInfoViewModel
 
         if (!ValidateTarget(editedTarget, except: target))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateTarget(editedTarget));
+
             // 直接修改当前绑定对象，避免替换 SelectedTarget 导致结构树和详情区域引用断开。
             target.Name = editedTarget.Name;
             target.Category = editedTarget.Category;
             target.Description = editedTarget.Description;
-
-            _targetInfoRepository.UpdateTarget(target);
 
             foreach (TargetStructureTreeNode rootNode in target.StructureTreeNodes)
             {
@@ -101,35 +101,35 @@ public sealed partial class TargetInfoViewModel
             RefreshSelectedDetailRows(SelectedStructureNode);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
             StatusText = $"已修改目标：{target.Name}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"修改目标失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 修改目标失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
     /// 删除目标及其全部结构数据。
     /// </summary>
-    public Task<bool> DeleteTargetAsync(TargetInfoItem target)
+    public async Task<bool> DeleteTargetAsync(TargetInfoItem target)
     {
         if (!Targets.Contains(target))
         {
             StatusText = "当前目标不存在，无法删除";
-            return Task.FromResult(false);
+            return false;
         }
 
         try
         {
             bool deletedSelectedTarget = ReferenceEquals(SelectedTarget, target);
 
-            // 删除前解除勾选事件，避免集合移除过程中触发无效 Unity 同步。
-            DetachCheckStateHandlers(target);
-            _targetInfoRepository.DeleteTarget(target.Code);
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.DeleteTarget(target.Code));
 
+            // 数据库删除成功后再解除勾选事件并移除界面数据，避免失败时界面状态丢失。
+            DetachCheckStateHandlers(target);
             Targets.Remove(target);
             RebuildTargetCategories();
 
@@ -143,13 +143,13 @@ public sealed partial class TargetInfoViewModel
             ScheduleCheckedPartUnitySync();
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: true);
             StatusText = $"已删除目标：{target.Name}";
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             StatusText = $"删除目标失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 删除目标失败：{ex}");
-            return Task.FromResult(false);
+            return false;
         }
     }
 }

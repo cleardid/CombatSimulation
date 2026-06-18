@@ -172,7 +172,7 @@ public sealed partial class TargetStructureTreeNode : ObservableObject
         _isUpdatingCheckState = true;
         try
         {
-            SetProperty(ref _isChecked, value, nameof(IsChecked));
+            IsChecked = value;
         }
         finally
         {

@@ -31,6 +31,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     private CancellationTokenSource? _partHighlightCts;
     private CancellationTokenSource? _checkedPartSyncCts;
     private CancellationTokenSource? _databaseSnapshotSyncCts;
+    private readonly SemaphoreSlim _repositoryOperationLock = new(1, 1);
     private string? _targetLoadStatusText;
 
     /// <summary>
