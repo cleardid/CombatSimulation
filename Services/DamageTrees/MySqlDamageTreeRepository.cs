@@ -1,4 +1,4 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CombatSimulation.Models.Unity;
 using CombatSimulation.Services.MySql;
 using System.Security.Cryptography;

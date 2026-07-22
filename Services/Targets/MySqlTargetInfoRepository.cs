@@ -1,4 +1,4 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CombatSimulation.Models.Unity;
 using CombatSimulation.Services.MySql;
 using System.Security.Cryptography;
@@ -203,11 +203,11 @@ public sealed class MySqlTargetInfoRepository
     /// <summary>
     /// 删除目标系统及其子系统和底层部件。
     /// </summary>
-    public void DeleteSystem(string targetCode, string systemCode)
+    public string? DeleteSystem(string targetCode, string systemCode)
     {
         if (string.IsNullOrWhiteSpace(systemCode))
         {
-            return;
+            return null;
         }
 
         using LoadAndWriteDb db = OpenDb();
@@ -215,6 +215,22 @@ public sealed class MySqlTargetInfoRepository
 
         List<Target_System_Info_By_MySQL> allSystems = db.mySqlCommand_TJ.SelectByField<Target_System_Info_By_MySQL>("t_s_TargetCode", targetCode);
         HashSet<string> codesToDelete = CollectDescendantSystemCodes(systemCode, allSystems);
+
+        List<Target_Part_Info_By_MySQL> partsToDelete = new();
+        foreach (string code in codesToDelete)
+        {
+            partsToDelete.AddRange(
+                db.mySqlCommand_TJ.SelectByField<Target_Part_Info_By_MySQL>("t_p_SystemCode", code));
+        }
+
+        string? referenceBlockReason = GetDamageTreeReferenceBlockReason(
+            db,
+            partsToDelete.Select(part => part.PartCode),
+            "删除系统");
+        if (referenceBlockReason != null)
+        {
+            return referenceBlockReason;
+        }
 
         foreach (string code in codesToDelete)
         {
@@ -225,6 +241,8 @@ public sealed class MySqlTargetInfoRepository
         {
             db.mySqlCommand_TJ.DeleteByID<Target_System_Info_By_MySQL>(code);
         }
+
+        return null;
     }
 
     /// <summary>
@@ -245,12 +263,30 @@ public sealed class MySqlTargetInfoRepository
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
 
+        string normalizedOriginalPartCode = originalPartCode?.Trim() ?? string.Empty;
+        string normalizedNewPartCode = part.PartCode?.Trim() ?? string.Empty;
+        bool isPartCodeChanged =
+            !string.Equals(normalizedOriginalPartCode, normalizedNewPartCode, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(normalizedOriginalPartCode);
+
+        if (isPartCodeChanged)
+        {
+            string? referenceBlockReason = GetDamageTreeReferenceBlockReason(
+                db,
+                new[] { normalizedOriginalPartCode },
+                "修改部件唯一标识");
+            if (referenceBlockReason != null)
+            {
+                throw new InvalidOperationException(referenceBlockReason);
+            }
+        }
+
         // ToMySqlPart 已集中处理颜色透明度、数值类型和参数字段映射，更新时只保留一次转换和一次写入。
         db.mySqlCommand_TJ.Insert(ToMySqlPart(part));
 
-        if (!string.Equals(originalPartCode, part.PartCode, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(originalPartCode))
+        if (isPartCodeChanged)
         {
-            db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(originalPartCode);
+            db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(normalizedOriginalPartCode);
         }
     }
 
@@ -269,16 +305,72 @@ public sealed class MySqlTargetInfoRepository
     /// <summary>
     /// 删除目标部件。
     /// </summary>
-    public void DeletePart(string targetCode, string partCode)
+    public string? DeletePart(string targetCode, string partCode)
     {
         if (string.IsNullOrWhiteSpace(partCode))
         {
-            return;
+            return null;
         }
 
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        string? referenceBlockReason = GetDamageTreeReferenceBlockReason(db, new[] { partCode }, "删除部件");
+        if (referenceBlockReason != null)
+        {
+            return referenceBlockReason;
+        }
+
         db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(partCode);
+        return null;
+    }
+
+    /// <summary>
+    /// 检查删除或改号是否会影响仍被毁伤树节点引用的部件。
+    /// </summary>
+    /// <returns>允许操作时返回 null，否则返回可直接展示给用户的禁止原因。</returns>
+    private static string? GetDamageTreeReferenceBlockReason(
+        LoadAndWriteDb db,
+        IEnumerable<string?> partCodes,
+        string operationName)
+    {
+        List<string> normalizedPartCodes = partCodes
+            .Select(code => code?.Trim() ?? string.Empty)
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (normalizedPartCodes.Count == 0)
+        {
+            return null;
+        }
+
+        List<Damage_Node_Info_By_MySQL> referencedNodes = new();
+        foreach (string partCode in normalizedPartCodes)
+        {
+            referencedNodes.AddRange(
+                db.mySqlCommand_TJ.SelectByField<Damage_Node_Info_By_MySQL>("d_n_PartCode", partCode));
+        }
+
+        if (referencedNodes.Count == 0)
+        {
+            return null;
+        }
+
+        int referencedPartCount = referencedNodes
+            .Select(node => node.PartCode)
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        string nodeNames = string.Join(
+            "、",
+            referencedNodes
+                .Select(node => string.IsNullOrWhiteSpace(node.NodeName) ? node.NodeCode : node.NodeName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.Ordinal)
+                .Take(3));
+        string nodeSummary = string.IsNullOrWhiteSpace(nodeNames) ? string.Empty : $"（节点：{nodeNames}）";
+
+        return $"不能{operationName}：其中 {referencedPartCount} 个部件正被 {referencedNodes.Count} 个毁伤树节点引用{nodeSummary}。请先删除或修改相关毁伤节点。";
     }
 
     private LoadAndWriteDb OpenDb()
