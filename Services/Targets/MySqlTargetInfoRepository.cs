@@ -27,7 +27,7 @@ public sealed class MySqlTargetInfoRepository
         _connectionString = ResolveDefaultConnectionString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(_connectionString))
         {
-            MySqlLog.LogWarning("MySQL 仓储未获得有效连接字符串，后续读取或写入会失败。 ");
+            MySqlLog.LogWarning("目标仓储未获得有效连接字符串，后续读取或写入会失败。 ");
         }
     }
 

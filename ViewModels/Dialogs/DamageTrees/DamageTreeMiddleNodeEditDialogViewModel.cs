@@ -1,7 +1,8 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -75,14 +76,14 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
         string nodeName = NodeName.Trim();
         if (string.IsNullOrWhiteSpace(nodeName))
         {
-            ValidationMessage = "请输入节点名称。";
+            ShowValidationMessage("请输入节点名称。");
             return;
         }
 
         DamageNodeRelationType relationType = SelectedRelationOption?.RelationType ?? DamageNodeRelationType.And;
         if (relationType == DamageNodeRelationType.Vote && VoteThreshold < 1f)
         {
-            ValidationMessage = "表决门阈值必须大于或等于 1。";
+            ShowValidationMessage("表决门阈值必须大于或等于 1。");
             return;
         }
 
@@ -104,6 +105,12 @@ public sealed partial class DamageTreeMiddleNodeEditDialogViewModel : Observable
     private void Cancel()
     {
         CloseRequested?.Invoke(this, new DialogCloseRequestedEventArgs(dialogResult: false));
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
 

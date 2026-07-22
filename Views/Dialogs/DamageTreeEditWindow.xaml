@@ -45,7 +45,7 @@
                     <TextBlock Text="{Binding TargetDisplayName}" Foreground="#CBD5E1" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 </Border>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="毁伤树名称" Style="{StaticResource DialogLabelStyle}" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="毁伤树名称*" Style="{StaticResource DialogLabelStyle}" />
                 <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
                 <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding DamageTreeName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
 
@@ -63,7 +63,7 @@
                     <TextBlock Text="{Binding DamageTreeType}" Foreground="#CBD5E1" FontSize="16" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 </Border>
 
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="根节点名称" Style="{StaticResource DialogLabelStyle}" />
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="根节点名称*" Style="{StaticResource DialogLabelStyle}" />
                 <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource DialogColonStyle}" />
                 <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding RootNodeName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogTextBoxStyle}" />
 
@@ -76,12 +76,9 @@
                 <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding DamageTreeDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DialogDescriptionTextBoxStyle}" />
             </Grid>
 
-            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,8,0,8">
-                <TextBlock Text="{Binding ValidationMessage}" Style="{StaticResource DialogValidationTextStyle}" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button Content="保存并退出" Style="{StaticResource DialogButtonStyle}" Command="{Binding SaveCommand}" />
-                    <Button Content="取消" Style="{StaticResource DialogButtonStyle}" Command="{Binding CancelCommand}" />
-                </StackPanel>
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Orientation="Horizontal" Margin="0,8,0,8">
+                <Button Content="保存并退出" Style="{StaticResource DialogButtonStyle}" Command="{Binding SaveCommand}" />
+                <Button Content="取消" Style="{StaticResource DialogButtonStyle}" Command="{Binding CancelCommand}" />
             </StackPanel>
         </Grid>
     </Border>

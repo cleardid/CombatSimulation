@@ -1,6 +1,7 @@
 ﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -71,7 +72,7 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
 
         if (string.IsNullOrWhiteSpace(systemName))
         {
-            ValidationMessage = "请输入系统名称。";
+            ShowValidationMessage("请输入系统名称。");
             return;
         }
 
@@ -163,5 +164,11 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
             ParentSystemCode = source.ParentSystemCode,
             TargetCode = source.TargetCode
         };
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

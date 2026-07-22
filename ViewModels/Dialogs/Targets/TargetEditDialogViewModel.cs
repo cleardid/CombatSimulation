@@ -1,6 +1,7 @@
 ﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -53,13 +54,13 @@ public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialo
 
         if (string.IsNullOrWhiteSpace(targetName))
         {
-            ValidationMessage = "请输入目标名称。";
+            ShowValidationMessage("请输入目标名称。");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(targetCategory))
         {
-            ValidationMessage = "请输入目标种类。";
+            ShowValidationMessage("请输入目标种类。");
             return;
         }
 
@@ -102,5 +103,11 @@ public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialo
         }
 
         return target;
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

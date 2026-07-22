@@ -57,3 +57,5 @@ cases/
 # 排除操作系统产生的缩略图等
 .DS_Store
 Thumbs.db
+
+.codex-tmp/
