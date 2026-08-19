@@ -23,8 +23,8 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     private const string DamageTreeInfoPanel = "毁伤树信息";
     private const string AllTargetCategory = "全部类型";
 
-    private readonly MySqlTargetInfoRepository _targetInfoRepository;
-    private readonly MySqlDamageTreeRepository _damageTreeRepository;
+    private readonly ITargetInfoRepository _targetInfoRepository;
+    private readonly IDamageTreeRepository _damageTreeRepository;
     private readonly IUnityCommandService _unityCommandService;
     private readonly bool _ownsUnityCommandService;
     private bool _disposed;
@@ -53,7 +53,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     /// <summary>
     /// 支持替换 MySQL 仓储和 Unity 命令服务的构造函数，便于显式传入连接配置或进行界面测试。
     /// </summary>
-    public TargetInfoViewModel(MySqlTargetInfoRepository targetInfoRepository, IUnityCommandService unityCommandService)
+    public TargetInfoViewModel(ITargetInfoRepository targetInfoRepository, IUnityCommandService unityCommandService)
         : this(targetInfoRepository, new MySqlDamageTreeRepository(), unityCommandService)
     {
     }
@@ -62,16 +62,16 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     /// 支持替换目标仓储、毁伤树仓储和 Unity 命令服务的构造函数。
     /// </summary>
     public TargetInfoViewModel(
-        MySqlTargetInfoRepository targetInfoRepository,
-        MySqlDamageTreeRepository damageTreeRepository,
+        ITargetInfoRepository targetInfoRepository,
+        IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService)
         : this(targetInfoRepository, damageTreeRepository, unityCommandService, ownsUnityCommandService: false)
     {
     }
 
     private TargetInfoViewModel(
-        MySqlTargetInfoRepository targetInfoRepository,
-        MySqlDamageTreeRepository damageTreeRepository,
+        ITargetInfoRepository targetInfoRepository,
+        IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService,
         bool ownsUnityCommandService)
     {

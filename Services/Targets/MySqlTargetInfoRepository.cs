@@ -15,7 +15,7 @@ namespace CombatSimulation.Services.Targets;
 /// 与原 MySQL 数据结构 Target_Info_By_MySQL / Target_System_Info_By_MySQL / Target_Part_Info_By_MySQL 之间转换。
 /// MySQL 基础访问类不依赖 WPF，因此仍可由 Unity 端直接复用。
 /// </remarks>
-public sealed class MySqlTargetInfoRepository
+public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
 {
     private readonly string _connectionString;
     private bool _databaseAndTableChecked;

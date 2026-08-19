@@ -12,7 +12,7 @@ namespace CombatSimulation.Services.DamageTrees;
 /// 该类只负责毁伤树主表和毁伤节点表的增删改查，不包含 Unity 通信逻辑。
 /// WPF 端使用 DamageTreeInfoItem / DamageTreeNodeItem；数据库端使用 Damage_Tree_Info_By_MySQL / Damage_Node_Info_By_MySQL。
 /// </remarks>
-public sealed class MySqlDamageTreeRepository
+public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
 {
     private readonly string _connectionString;
     private bool _databaseAndTableChecked;
