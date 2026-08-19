@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Remove="Service\**" />
+    <Compile Remove="CombatSimulation.Tests\**\*.cs" />
     <EmbeddedResource Remove="Service\**" />
     <None Remove="Service\**" />
     <Page Remove="Service\**" />
