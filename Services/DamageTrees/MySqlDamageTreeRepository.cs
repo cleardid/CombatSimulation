@@ -1,5 +1,4 @@
 using CombatSimulation.Models;
-using CombatSimulation.Models.Unity;
 using CombatSimulation.Services.MySql;
 using System.Security.Cryptography;
 using System.Text;
@@ -70,26 +69,6 @@ public sealed class MySqlDamageTreeRepository
         List<Damage_Node_Info_By_MySQL> allNodeRows = db.GetTableData<Damage_Node_Info_By_MySQL>();
 
         return BuildDamageTrees(treeRows, allNodeRows, partsByCode);
-    }
-
-    /// <summary>
-    /// 将毁伤树相关两张表追加到 Unity 数据库快照。
-    /// </summary>
-    /// <remarks>
-    /// Unity 只消费快照中的毁伤树表数据，不直接写入 t_d_tree / t_d_node。
-    /// </remarks>
-    public void AppendDamageTreeTablesToSnapshot(CombatDatabaseSnapshot snapshot)
-    {
-        if (snapshot == null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
-
-        using LoadAndWriteDb db = OpenDb();
-        EnsureGuidIdentifiers(db);
-
-        snapshot.DamageTrees.AddRange(db.GetTableData<Damage_Tree_Info_By_MySQL>());
-        snapshot.DamageNodes.AddRange(db.GetTableData<Damage_Node_Info_By_MySQL>());
     }
 
     /// <summary>
@@ -263,7 +242,7 @@ public sealed class MySqlDamageTreeRepository
     /// <summary>
     /// 将历史导入的整型树标识、节点标识迁移为稳定 GUID。
     /// </summary>
-    private static void EnsureGuidIdentifiers(LoadAndWriteDb db)
+    internal static void EnsureGuidIdentifiers(LoadAndWriteDb db)
     {
         db.ExecuteInTransaction(() =>
         {

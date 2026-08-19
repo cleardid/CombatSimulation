@@ -86,10 +86,20 @@ public sealed partial class TargetInfoViewModel
     /// </summary>
     private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<TResult> operation)
     {
-        await _repositoryOperationLock.WaitAsync().ConfigureAwait(false);
+        return await RunRepositoryOperationAsync(operation, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 在后台线程串行执行可取消的数据库读取；取消后不会继续占用仓储锁创建过期快照。
+    /// </summary>
+    private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<TResult> operation, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        await _repositoryOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await Task.Run(operation).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return await Task.Run(operation, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

@@ -142,7 +142,8 @@ public sealed partial class TargetInfoViewModel
                 await Task.Delay(delayMilliseconds, cancellationToken).ConfigureAwait(false);
             }
 
-            CombatDatabaseSnapshot snapshot = CreateUnityDatabaseSnapshot();
+            CombatDatabaseSnapshot snapshot = await RunRepositoryOperationAsync(
+                _targetInfoRepository.CreateDatabaseSnapshot, cancellationToken).ConfigureAwait(false);
             await _unityCommandService.LoadDatabaseSnapshotAsync(snapshot, cancellationToken).ConfigureAwait(false);
 
             SetStatusTextOnUiThread($"已同步数据库快照到 Unity：目标 {snapshot.Targets.Count}，系统 {snapshot.TargetSystems.Count}，部件 {snapshot.TargetParts.Count}，毁伤树 {snapshot.DamageTrees.Count}，毁伤节点 {snapshot.DamageNodes.Count}");
@@ -171,17 +172,6 @@ public sealed partial class TargetInfoViewModel
 
             cts.Dispose();
         }
-    }
-
-    /// <summary>
-    /// 从 MySQL 仓储读取当前全量表数据，并组装为 Unity 端可直接反序列化的快照对象。
-    /// </summary>
-    private CombatDatabaseSnapshot CreateUnityDatabaseSnapshot()
-    {
-        CombatDatabaseSnapshot snapshot = new();
-        _targetInfoRepository.AppendTargetTablesToSnapshot(snapshot);
-        _damageTreeRepository.AppendDamageTreeTablesToSnapshot(snapshot);
-        return snapshot;
     }
 
     /// <summary>

@@ -160,6 +160,19 @@ public sealed class MySqlCommand_TJ : MySqlConnect
     /// </summary>
     public TResult ExecuteInTransaction<TResult>(Func<TResult> operation)
     {
+        return ExecuteInTransactionCore(operation, isolationLevel: null);
+    }
+
+    /// <summary>
+    /// 在指定隔离级别的事务中执行一个带返回值的原子业务操作。
+    /// </summary>
+    public TResult ExecuteInTransaction<TResult>(IsolationLevel isolationLevel, Func<TResult> operation)
+    {
+        return ExecuteInTransactionCore(operation, isolationLevel);
+    }
+
+    private TResult ExecuteInTransactionCore<TResult>(Func<TResult> operation, IsolationLevel? isolationLevel)
+    {
         ArgumentNullException.ThrowIfNull(operation);
         EnsureCommandReady();
 
@@ -169,7 +182,9 @@ public sealed class MySqlCommand_TJ : MySqlConnect
             return operation();
         }
 
-        using MySqlTransaction transaction = _sqlConn.BeginTransaction();
+        using MySqlTransaction transaction = isolationLevel.HasValue
+            ? _sqlConn.BeginTransaction(isolationLevel.Value)
+            : _sqlConn.BeginTransaction();
         _sqlComm.Transaction = transaction;
         try
         {

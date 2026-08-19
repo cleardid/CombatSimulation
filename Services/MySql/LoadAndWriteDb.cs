@@ -1,5 +1,6 @@
 using CombatSimulation.MySQLClassBase;
 using Newtonsoft.Json;
+using System.Data;
 
 namespace CombatSimulation.Services.MySql;
 
@@ -69,6 +70,14 @@ public sealed class LoadAndWriteDb : IDisposable
     public TResult ExecuteInTransaction<TResult>(Func<TResult> operation)
     {
         return mySqlCommand_TJ.ExecuteInTransaction(operation);
+    }
+
+    /// <summary>
+    /// 在指定隔离级别的单个 MySQL 事务中执行一个带返回值的原子业务操作。
+    /// </summary>
+    public TResult ExecuteInTransaction<TResult>(IsolationLevel isolationLevel, Func<TResult> operation)
+    {
+        return mySqlCommand_TJ.ExecuteInTransaction(isolationLevel, operation);
     }
 
     /// <summary>

@@ -1,6 +1,8 @@
 using CombatSimulation.Models;
 using CombatSimulation.Models.Unity;
+using CombatSimulation.Services.DamageTrees;
 using CombatSimulation.Services.MySql;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -71,32 +73,37 @@ public sealed class MySqlTargetInfoRepository
     }
 
     /// <summary>
-    /// 将目标相关三张表追加到 Unity 数据库快照。
+    /// 在同一可重复读事务中读取目标、系统、部件、毁伤树和毁伤节点五张表。
     /// </summary>
     /// <remarks>
-    /// 该方法直接从 MySQL 读取原始表结构，避免通过 WPF 界面模型二次转换造成字段遗漏。
+    /// 直接读取 MySQL 原始表结构，避免界面模型二次转换遗漏字段；
+    /// 单连接事务保证 Unity 不会收到跨写入时点拼接出的混合快照。
     /// </remarks>
-    public void AppendTargetTablesToSnapshot(CombatDatabaseSnapshot snapshot)
+    public CombatDatabaseSnapshot CreateDatabaseSnapshot()
     {
-        if (snapshot == null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
-
         using LoadAndWriteDb db = OpenDb();
-        EnsureGuidIdentifiers(db);
 
-        snapshot.Targets.AddRange(db.GetTableData<Target_Info_By_MySQL>());
-        snapshot.TargetSystems.AddRange(db.GetTableData<Target_System_Info_By_MySQL>());
-
-        List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
-        foreach (Target_Part_Info_By_MySQL part in partRows)
+        return db.ExecuteInTransaction(IsolationLevel.RepeatableRead, () =>
         {
-            // Unity 快照只接受数据库色值语义，这里统一补齐固定透明度 0F。
-            part.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.PartColor);
-        }
+            EnsureGuidIdentifiers(db);
+            MySqlDamageTreeRepository.EnsureGuidIdentifiers(db);
 
-        snapshot.TargetParts.AddRange(partRows);
+            CombatDatabaseSnapshot snapshot = new();
+            snapshot.Targets.AddRange(db.GetTableData<Target_Info_By_MySQL>());
+            snapshot.TargetSystems.AddRange(db.GetTableData<Target_System_Info_By_MySQL>());
+
+            List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
+            foreach (Target_Part_Info_By_MySQL part in partRows)
+            {
+                // Unity 快照只接受数据库色值语义，这里统一补齐固定透明度 0F。
+                part.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.PartColor);
+            }
+
+            snapshot.TargetParts.AddRange(partRows);
+            snapshot.DamageTrees.AddRange(db.GetTableData<Damage_Tree_Info_By_MySQL>());
+            snapshot.DamageNodes.AddRange(db.GetTableData<Damage_Node_Info_By_MySQL>());
+            return snapshot;
+        });
     }
 
     /// <summary>
