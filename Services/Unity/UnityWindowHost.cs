@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -11,20 +12,18 @@ namespace CombatSimulation.Services.Unity
     /// 该类只负责 Unity 主窗口句柄查找、父窗口绑定、显示隐藏和位置尺寸维护。
     ///
     /// 目标结构信息界面现在使用 HwndHost 创建原生宿主窗口，因此 Unity 显示时只需要被设置为
-    /// 该宿主 HWND 的子窗口，并填满宿主客户区。隐藏时会优先把 Unity 窗口重新挂回 WPF 主窗口，
-    /// 避免页面卸载时 HwndHost 被销毁，从而连带销毁 Unity 的渲染窗口。
+    /// 该宿主 HWND 的子窗口，并填满宿主客户区。普通页面切换只改变可见状态；仅当宿主 HWND
+    /// 真正销毁时，才把 Unity 窗口重新挂回 WPF 主窗口，避免频繁 SetParent 干扰渲染交换链。
     /// </remarks>
     internal sealed class UnityWindowHost
     {
         private static readonly TimeSpan HiddenPreparationTimeout = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan VisiblePreparationTimeout = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan WindowSearchInterval = TimeSpan.FromMilliseconds(100);
-        private static readonly TimeSpan VisibleFastApplyInterval = TimeSpan.FromMilliseconds(120);
-        private static readonly TimeSpan VisibleSlowApplyInterval = TimeSpan.FromMilliseconds(500);
-
-        private const int FastApplyCount = 40;
 
         private const int GwlStyle = -16;
         private const int GwlExStyle = -20;
+        private const int GwlpUserData = -21;
         private const long WsChild = 0x40000000L;
         private const long WsVisible = 0x10000000L;
         private const long WsDisabled = 0x08000000L;
@@ -43,8 +42,6 @@ namespace CombatSimulation.Services.Unity
         private const uint SwpNoZOrder = 0x0004;
         private const uint SwpNoActivate = 0x0010;
         private const uint SwpFrameChanged = 0x0020;
-        private const uint SwpShowWindow = 0x0040;
-        private const uint SwpHideWindow = 0x0080;
         private const int SwHide = 0;
         private const int SwShow = 5;
         private const uint GwOwner = 4;
@@ -65,10 +62,21 @@ namespace CombatSimulation.Services.Unity
 
         private bool _hasHostBounds;
         private bool _shouldBeVisible;
+        private bool _detachFromHostWhenHidden;
         private bool _stopping;
         private long _stateVersion;
         private DateTime _hiddenPreparationDeadlineUtc;
+        private DateTime _visiblePreparationDeadlineUtc;
+        private TaskCompletionSource<bool>? _showCompletion;
         private Task? _reconcileTask;
+
+        private nint _appliedUnityWindowHwnd;
+        private nint _appliedParentHwnd;
+        private int _appliedX;
+        private int _appliedY;
+        private int _appliedWidth;
+        private int _appliedHeight;
+        private bool _isAppliedVisible;
 
         public UnityWindowHost(Func<Process> getRunningProcess)
         {
@@ -87,6 +95,11 @@ namespace CombatSimulation.Services.Unity
         {
             lock (_stateLock)
             {
+                if (_defaultParentHwnd == parentHwnd)
+                {
+                    return;
+                }
+
                 _defaultParentHwnd = parentHwnd;
                 _stateVersion++;
             }
@@ -109,6 +122,16 @@ namespace CombatSimulation.Services.Unity
 
             lock (_stateLock)
             {
+                if (_hasHostBounds &&
+                    _hostParentHwnd == parentHwnd &&
+                    _hostX == x &&
+                    _hostY == y &&
+                    _hostWidth == width &&
+                    _hostHeight == height)
+                {
+                    return;
+                }
+
                 _hostParentHwnd = parentHwnd;
                 _hostX = x;
                 _hostY = y;
@@ -133,6 +156,7 @@ namespace CombatSimulation.Services.Unity
 
             lock (_stateLock)
             {
+                _detachFromHostWhenHidden = false;
                 _hiddenPreparationDeadlineUtc = DateTime.UtcNow + HiddenPreparationTimeout;
                 _stateVersion++;
             }
@@ -142,23 +166,39 @@ namespace CombatSimulation.Services.Unity
         }
 
         /// <summary>
-        /// 按当前缓存的宿主区域显示 Unity 窗口。
+        /// 按当前缓存的宿主区域显示 Unity 窗口，并等待父窗口、可见性和客户区尺寸均校验成功。
         /// </summary>
-        public Task ShowAsync(CancellationToken cancellationToken)
+        public async Task ShowAsync(CancellationToken cancellationToken)
         {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return Task.CompletedTask;
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+
+            Task showTask;
 
             lock (_stateLock)
             {
                 _shouldBeVisible = true;
-                _stateVersion++;
+                _detachFromHostWhenHidden = false;
+                _visiblePreparationDeadlineUtc = DateTime.UtcNow + VisiblePreparationTimeout;
+
+                if (_showCompletion == null || _showCompletion.Task.IsCompleted)
+                {
+                    _showCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _stateVersion++;
+                }
+
+                showTask = _showCompletion.Task;
             }
 
             RequestReconcile();
-            return Task.CompletedTask;
+
+            try
+            {
+                await showTask.WaitAsync(VisiblePreparationTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException("未能在限定时间内找到、挂载并显示 Unity 窗口。", ex);
+            }
         }
 
         /// <summary>
@@ -166,36 +206,74 @@ namespace CombatSimulation.Services.Unity
         /// </summary>
         public void Hide()
         {
-            nint unityHwnd;
-            nint defaultParentHwnd;
+            TaskCompletionSource<bool>? showCompletion;
+            bool desiredStateChanged;
 
             lock (_stateLock)
             {
+                desiredStateChanged =
+                    _shouldBeVisible ||
+                    _isAppliedVisible ||
+                    _showCompletion != null ||
+                    _detachFromHostWhenHidden;
                 _shouldBeVisible = false;
-                unityHwnd = _unityWindowHwnd;
-                defaultParentHwnd = _defaultParentHwnd;
+                _detachFromHostWhenHidden = false;
+                showCompletion = _showCompletion;
+                _showCompletion = null;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
+
+                if (desiredStateChanged)
+                {
+                    _stateVersion++;
+                }
+            }
+
+            showCompletion?.TrySetCanceled();
+
+            if (desiredStateChanged)
+            {
+                RequestReconcile();
+            }
+        }
+
+        /// <summary>
+        /// 原生宿主 HWND 即将销毁时，同步隐藏 Unity 并把它挂回默认父窗口。
+        /// 普通页面切换不得调用该方法，以免反复 SetParent 干扰 Unity 渲染窗口。
+        /// </summary>
+        public void DetachFromHost(nint hostHwnd)
+        {
+            if (hostHwnd == 0)
+            {
+                return;
+            }
+
+            TaskCompletionSource<bool>? showCompletion;
+            lock (_stateLock)
+            {
+                _shouldBeVisible = false;
+                _detachFromHostWhenHidden = true;
+                showCompletion = _showCompletion;
+                _showCompletion = null;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
                 _stateVersion++;
             }
 
-            // 页面切换时 HwndHost 可能马上被销毁。这里同步把 Unity 挂回主窗口并隐藏，避免被临时宿主销毁。
-            if (unityHwnd != 0 && IsWindow(unityHwnd))
+            showCompletion?.TrySetCanceled();
+
+            // DestroyWindowCore 返回后宿主 HWND 就会被销毁，因此这里必须等待同一把窗口锁，
+            // 保证不会和后台 Show/SetParent 交叉执行。
+            _windowLock.Wait();
+            try
             {
-                if (_windowLock.Wait(0))
+                nint unityHwnd = GetCachedWindowHandle();
+                if (unityHwnd != 0 && IsWindow(unityHwnd) && GetParent(unityHwnd) == hostHwnd)
                 {
-                    try
-                    {
-                        HideWindowCore(unityHwnd);
-                        AttachToParent(unityHwnd, defaultParentHwnd);
-                    }
-                    finally
-                    {
-                        _windowLock.Release();
-                    }
+                    ReparentToDefaultAndHide(unityHwnd);
                 }
-                else
-                {
-                    HideWindowCore(unityHwnd);
-                }
+            }
+            finally
+            {
+                _windowLock.Release();
             }
 
             RequestReconcile();
@@ -209,6 +287,7 @@ namespace CombatSimulation.Services.Unity
             lock (_stateLock)
             {
                 _shouldBeVisible = false;
+                _detachFromHostWhenHidden = false;
                 _hasHostBounds = false;
                 _hostParentHwnd = 0;
                 _hostX = 0;
@@ -218,6 +297,10 @@ namespace CombatSimulation.Services.Unity
                 _unityWindowHwnd = 0;
                 _attachedParentHwnd = 0;
                 _hiddenPreparationDeadlineUtc = DateTime.MinValue;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
+                _showCompletion?.TrySetCanceled();
+                _showCompletion = null;
+                ClearAppliedVisibleStateCore();
                 _stateVersion++;
             }
         }
@@ -234,12 +317,24 @@ namespace CombatSimulation.Services.Unity
                 _stopping = true;
                 _shouldBeVisible = false;
                 unityHwnd = _unityWindowHwnd;
+                _showCompletion?.TrySetCanceled();
+                _showCompletion = null;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
+                _isAppliedVisible = false;
                 _stateVersion++;
             }
 
-            if (unityHwnd != 0 && IsWindow(unityHwnd))
+            _windowLock.Wait();
+            try
             {
-                HideWindowCore(unityHwnd);
+                if (unityHwnd != 0 && IsWindow(unityHwnd))
+                {
+                    HideWindowCore(unityHwnd);
+                }
+            }
+            finally
+            {
+                _windowLock.Release();
             }
         }
 
@@ -261,13 +356,12 @@ namespace CombatSimulation.Services.Unity
 
         private async Task ReconcileLoopAsync()
         {
-            int visibleApplyCount = 0;
-
             while (true)
             {
                 HostStateSnapshot snapshot = GetHostStateSnapshot();
                 if (snapshot.IsStopping)
                 {
+                    FinishWorker(snapshot.Version);
                     return;
                 }
 
@@ -275,21 +369,40 @@ namespace CombatSimulation.Services.Unity
                 {
                     if (snapshot.ShouldBeVisible)
                     {
-                        visibleApplyCount++;
-                        await ApplyVisibleStateOnceAsync(snapshot).ConfigureAwait(false);
+                        VisibleApplyResult result = await ApplyVisibleStateOnceAsync(snapshot).ConfigureAwait(false);
+                        if (result.Applied)
+                        {
+                            CompleteShowRequest(result.Version);
 
-                        TimeSpan interval = visibleApplyCount <= FastApplyCount
-                            ? VisibleFastApplyInterval
-                            : VisibleSlowApplyInterval;
+                            if (FinishWorker(result.Version))
+                            {
+                                return;
+                            }
 
-                        await Task.Delay(interval).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        if (snapshot.VisiblePreparationDeadlineUtc <= DateTime.UtcNow)
+                        {
+                            FailShowRequest(
+                                new TimeoutException("未能在限定时间内找到可用的 Unity 窗口或宿主区域。"),
+                                snapshot.Version);
+
+                            if (FinishWorker(snapshot.Version))
+                            {
+                                return;
+                            }
+
+                            continue;
+                        }
+
+                        await Task.Delay(WindowSearchInterval).ConfigureAwait(false);
                         continue;
                     }
 
-                    visibleApplyCount = 0;
                     bool hiddenStateHandled = await ApplyHiddenStateOnceAsync(snapshot).ConfigureAwait(false);
 
-                    if (hiddenStateHandled && CanWorkerExit(snapshot.Version))
+                    if (hiddenStateHandled && FinishWorker(snapshot.Version))
                     {
                         return;
                     }
@@ -299,29 +412,46 @@ namespace CombatSimulation.Services.Unity
                 catch (Exception ex)
                 {
                     Log($"Unity 窗口状态收敛失败：{ex.Message}");
-                    await Task.Delay(VisibleFastApplyInterval).ConfigureAwait(false);
+
+                    if (snapshot.ShouldBeVisible && snapshot.VisiblePreparationDeadlineUtc <= DateTime.UtcNow)
+                    {
+                        FailShowRequest(ex, snapshot.Version);
+
+                        if (FinishWorker(snapshot.Version))
+                        {
+                            return;
+                        }
+                    }
+
+                    await Task.Delay(WindowSearchInterval).ConfigureAwait(false);
                 }
             }
         }
 
-        private async Task ApplyVisibleStateOnceAsync(HostStateSnapshot snapshot)
+        private async Task<VisibleApplyResult> ApplyVisibleStateOnceAsync(HostStateSnapshot snapshot)
         {
             if (!snapshot.HasHostBounds || snapshot.ParentHwnd == 0 || !IsWindow(snapshot.ParentHwnd))
             {
-                return;
+                return new VisibleApplyResult(false, snapshot.Version);
             }
 
             Process process = _getRunningProcess();
             if (process.HasExited)
             {
                 ClearCachedWindowHandle();
-                return;
+                return new VisibleApplyResult(false, snapshot.Version);
             }
 
             nint unityHwnd = FindBestWindowHandle(process);
             if (unityHwnd == 0 || !IsWindow(unityHwnd))
             {
-                return;
+                return new VisibleApplyResult(false, snapshot.Version);
+            }
+
+            // Unity marks bit 0 of GWLP_USERDATA when graphics initialization is complete.
+            if (!IsUnityGraphicsReady(unityHwnd))
+            {
+                return new VisibleApplyResult(false, snapshot.Version);
             }
 
             await _windowLock.WaitAsync().ConfigureAwait(false);
@@ -330,27 +460,69 @@ namespace CombatSimulation.Services.Unity
                 snapshot = GetHostStateSnapshot();
                 if (snapshot.IsStopping)
                 {
-                    return;
+                    return new VisibleApplyResult(false, snapshot.Version);
                 }
 
                 if (!snapshot.ShouldBeVisible)
                 {
-                    ReparentToDefaultAndHide(unityHwnd);
-                    return;
+                    ApplyHiddenWindowState(unityHwnd, snapshot.DetachFromHostWhenHidden);
+                    return new VisibleApplyResult(false, snapshot.Version);
                 }
 
                 if (!snapshot.HasHostBounds || snapshot.ParentHwnd == 0 || !IsWindow(snapshot.ParentHwnd))
                 {
-                    return;
+                    return new VisibleApplyResult(false, snapshot.Version);
                 }
-
-                AttachToParent(unityHwnd, snapshot.ParentHwnd);
 
                 // 这里不完全信任视图层传入的宽高。HwndHost 的原生子窗口可能先以旧尺寸创建，
                 // 随后才被 WPF 布局系统调整。每次显示收敛时直接读取当前父 HWND 的客户区，
                 // 可以避免 Unity 偶发只占左侧一部分区域。
                 GetEffectiveHostBounds(snapshot, out int x, out int y, out int width, out int height);
-                ShowWindowAt(unityHwnd, x, y, width, height);
+                bool parentChanged = GetParent(unityHwnd) != snapshot.ParentHwnd || _attachedParentHwnd != snapshot.ParentHwnd;
+                bool boundsChanged =
+                    _appliedUnityWindowHwnd != unityHwnd ||
+                    _appliedParentHwnd != snapshot.ParentHwnd ||
+                    _appliedX != x ||
+                    _appliedY != y ||
+                    _appliedWidth != width ||
+                    _appliedHeight != height;
+                bool wasVisible = IsWindowVisible(unityHwnd);
+
+                if (parentChanged)
+                {
+                    AttachToParent(unityHwnd, snapshot.ParentHwnd);
+                }
+
+                if (parentChanged || boundsChanged || !wasVisible || !_isAppliedVisible)
+                {
+                    ShowWindowAt(
+                        unityHwnd,
+                        x,
+                        y,
+                        width,
+                        height,
+                        frameChanged: parentChanged);
+                }
+
+                if (GetParent(unityHwnd) != snapshot.ParentHwnd ||
+                    !IsWindowVisible(unityHwnd) ||
+                    !HasExpectedClientSize(unityHwnd, width, height))
+                {
+                    throw new Win32Exception("Unity 窗口挂载、显示或尺寸状态校验失败。");
+                }
+
+                lock (_stateLock)
+                {
+                    _appliedUnityWindowHwnd = unityHwnd;
+                    _appliedParentHwnd = snapshot.ParentHwnd;
+                    _appliedX = x;
+                    _appliedY = y;
+                    _appliedWidth = width;
+                    _appliedHeight = height;
+                    _isAppliedVisible = true;
+                }
+
+                return new VisibleApplyResult(true, snapshot.Version);
             }
             finally
             {
@@ -394,7 +566,8 @@ namespace CombatSimulation.Services.Unity
                     return false;
                 }
 
-                ReparentToDefaultAndHide(unityHwnd);
+                ApplyHiddenWindowState(unityHwnd, current.DetachFromHostWhenHidden);
+
                 return true;
             }
             finally
@@ -403,12 +576,54 @@ namespace CombatSimulation.Services.Unity
             }
         }
 
-        private bool CanWorkerExit(long observedVersion)
+        private bool FinishWorker(long observedVersion)
         {
             lock (_stateLock)
             {
-                return !_shouldBeVisible && !_stopping && _stateVersion == observedVersion;
+                if (_stateVersion != observedVersion)
+                {
+                    return false;
+                }
+
+                _reconcileTask = null;
+                return true;
             }
+        }
+
+        private void CompleteShowRequest(long appliedVersion)
+        {
+            TaskCompletionSource<bool>? completion;
+            lock (_stateLock)
+            {
+                if (!_shouldBeVisible || _stateVersion != appliedVersion)
+                {
+                    return;
+                }
+
+                completion = _showCompletion;
+                _showCompletion = null;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
+            }
+
+            completion?.TrySetResult(true);
+        }
+
+        private void FailShowRequest(Exception exception, long observedVersion)
+        {
+            TaskCompletionSource<bool>? completion;
+            lock (_stateLock)
+            {
+                if (!_shouldBeVisible || _stateVersion != observedVersion)
+                {
+                    return;
+                }
+
+                completion = _showCompletion;
+                _showCompletion = null;
+                _visiblePreparationDeadlineUtc = DateTime.MinValue;
+            }
+
+            completion?.TrySetException(exception);
         }
 
         private HostStateSnapshot GetHostStateSnapshot()
@@ -423,8 +638,10 @@ namespace CombatSimulation.Services.Unity
                     Math.Max(1, _hostHeight),
                     _hasHostBounds && _hostParentHwnd != 0,
                     _shouldBeVisible,
+                    _detachFromHostWhenHidden,
                     _stopping,
                     _hiddenPreparationDeadlineUtc,
+                    _visiblePreparationDeadlineUtc,
                     _stateVersion);
             }
         }
@@ -447,11 +664,85 @@ namespace CombatSimulation.Services.Unity
             {
                 _unityWindowHwnd = 0;
                 _attachedParentHwnd = 0;
+                ClearAppliedVisibleStateCore();
             }
+        }
+
+        private void ClearAppliedVisibleStateCore()
+        {
+            _appliedUnityWindowHwnd = 0;
+            _appliedParentHwnd = 0;
+            _appliedX = 0;
+            _appliedY = 0;
+            _appliedWidth = 0;
+            _appliedHeight = 0;
+            _isAppliedVisible = false;
+        }
+
+        private static nint FindChildWindowByProcessId(nint parentHwnd, int processId)
+        {
+            List<WindowCandidate> candidates = new();
+
+            EnumChildWindows(parentHwnd, (hwnd, _) =>
+            {
+                _ = (nint)GetWindowThreadProcessId(hwnd, out int windowProcessId);
+                if (windowProcessId != processId || !IsWindow(hwnd))
+                {
+                    return true;
+                }
+
+                string className = GetWindowClassName(hwnd);
+                candidates.Add(new WindowCandidate(
+                    hwnd,
+                    className.Contains("UnityWndClass", StringComparison.OrdinalIgnoreCase),
+                    IsWindowVisible(hwnd),
+                    GetWindowArea(hwnd)));
+                return true;
+            }, 0);
+
+            return candidates
+                .OrderByDescending(candidate => candidate.IsUnityWindow)
+                .ThenByDescending(candidate => candidate.IsVisible)
+                .ThenByDescending(candidate => candidate.Area)
+                .Select(candidate => candidate.Hwnd)
+                .FirstOrDefault();
         }
 
         private nint FindBestWindowHandle(Process process)
         {
+            nint[] possibleParents;
+            lock (_stateLock)
+            {
+                possibleParents = new[] { _hostParentHwnd, _attachedParentHwnd, _defaultParentHwnd };
+            }
+
+            // A player started with -parentHWND is a child window and is not returned by EnumWindows.
+            foreach (nint parentHwnd in possibleParents.Distinct())
+            {
+                if (parentHwnd == 0 || !IsWindow(parentHwnd))
+                {
+                    continue;
+                }
+
+                nint childHwnd = FindChildWindowByProcessId(parentHwnd, process.Id);
+                if (childHwnd == 0 || !IsWindow(childHwnd))
+                {
+                    continue;
+                }
+
+                if (childHwnd != _unityWindowHwnd)
+                {
+                    lock (_stateLock)
+                    {
+                        _unityWindowHwnd = childHwnd;
+                        _attachedParentHwnd = GetParent(childHwnd);
+                        ClearAppliedVisibleStateCore();
+                    }
+                }
+
+                return childHwnd;
+            }
+
             // Unity 启动阶段可能先创建 Splash 或中间窗口，随后才创建真正的 UnityWndClass 主窗口。
             nint freshTopLevelHwnd = FindTopLevelWindowByProcessId(process.Id);
             if (freshTopLevelHwnd != 0 && IsWindow(freshTopLevelHwnd))
@@ -462,6 +753,7 @@ namespace CombatSimulation.Services.Unity
                     {
                         _unityWindowHwnd = freshTopLevelHwnd;
                         _attachedParentHwnd = 0;
+                        ClearAppliedVisibleStateCore();
                     }
                 }
 
@@ -482,6 +774,7 @@ namespace CombatSimulation.Services.Unity
                 {
                     _unityWindowHwnd = mainWindowHwnd;
                     _attachedParentHwnd = 0;
+                    ClearAppliedVisibleStateCore();
                 }
 
                 return mainWindowHwnd;
@@ -501,6 +794,11 @@ namespace CombatSimulation.Services.Unity
             // 先隐藏，再切换父窗口。否则 Unity 仍然可见时被挂回主窗口，可能在主窗口左上角闪一下。
             HideWindowCore(unityHwnd);
 
+            lock (_stateLock)
+            {
+                _isAppliedVisible = false;
+            }
+
             if (defaultParentHwnd != 0 && IsWindow(defaultParentHwnd))
             {
                 AttachToParent(unityHwnd, defaultParentHwnd);
@@ -519,8 +817,9 @@ namespace CombatSimulation.Services.Unity
             long style = GetWindowStyle(unityHwnd).ToInt64();
             long childStyle = (style | WsChild | WsClipChildren | WsClipSiblings) &
                               ~(WsPopup | WsCaption | WsThickFrame | WsMinimize | WsMaximize | WsDisabled);
+            bool frameChanged = style != childStyle;
 
-            if (style != childStyle)
+            if (frameChanged)
             {
                 SetWindowStyle(unityHwnd, new nint(childStyle));
             }
@@ -529,17 +828,27 @@ namespace CombatSimulation.Services.Unity
             if (_attachedParentHwnd != parentHwnd || currentParent != parentHwnd)
             {
                 SetParent(unityHwnd, parentHwnd);
+                if (GetParent(unityHwnd) != parentHwnd)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "设置 Unity 窗口父句柄失败。");
+                }
+
                 _attachedParentHwnd = parentHwnd;
+                frameChanged = true;
             }
 
-            SetWindowPos(
-                unityHwnd,
-                HwndTop,
-                0,
-                0,
-                0,
-                0,
-                SwpNoMove | SwpNoSize | SwpNoZOrder | SwpFrameChanged);
+            if (frameChanged &&
+                !SetWindowPos(
+                    unityHwnd,
+                    HwndTop,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "刷新 Unity 窗口样式失败。");
+            }
         }
 
         private static void GetEffectiveHostBounds(HostStateSnapshot snapshot, out int x, out int y, out int width, out int height)
@@ -568,40 +877,75 @@ namespace CombatSimulation.Services.Unity
             }
         }
 
-        private static void ShowWindowAt(nint unityHwnd, int x, int y, int width, int height)
+        private static void ShowWindowAt(
+            nint unityHwnd,
+            int x,
+            int y,
+            int width,
+            int height,
+            bool frameChanged)
         {
             int effectiveWidth = Math.Max(1, width);
             int effectiveHeight = Math.Max(1, height);
 
-            // 关键顺序：先在隐藏状态下移动并缩放到宿主区域，再显示。
-            // 如果先 ShowWindow，再 MoveWindow，Unity 会短暂显示在默认父窗口的 (0,0) 位置。
-            MoveWindow(unityHwnd, x, y, effectiveWidth, effectiveHeight, false);
-
             EnsureInteractiveWindowStyle(unityHwnd);
 
-            SetWindowPos(
-                unityHwnd,
-                HwndTop,
-                x,
-                y,
-                effectiveWidth,
-                effectiveHeight,
-                SwpNoZOrder | SwpFrameChanged);
+            uint flags = SwpNoZOrder | SwpNoActivate;
+            if (frameChanged)
+            {
+                flags |= SwpFrameChanged;
+            }
 
-            ShowWindow(unityHwnd, SwShow);
+            // 只在父窗口、尺寸或可见状态真实变化时执行一次定位。
+            // 不再使用 MoveWindow(repaint=true) 和 UpdateWindow 同步逼迫 Unity 重绘。
+            if (!SetWindowPos(unityHwnd, HwndTop, x, y, effectiveWidth, effectiveHeight, flags))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "定位 Unity 窗口失败。");
+            }
 
-            SetWindowPos(
-                unityHwnd,
-                HwndTop,
-                x,
-                y,
-                effectiveWidth,
-                effectiveHeight,
-                SwpNoZOrder | SwpFrameChanged | SwpShowWindow);
+            if (!IsWindowVisible(unityHwnd))
+            {
+                ShowWindow(unityHwnd, SwShow);
+            }
+        }
 
-            MoveWindow(unityHwnd, x, y, effectiveWidth, effectiveHeight, true);
-            UpdateWindow(unityHwnd);
-            FocusUnityWindowCore(unityHwnd);
+        private void ApplyHiddenWindowState(nint unityHwnd, bool detachFromHost)
+        {
+            if (detachFromHost)
+            {
+                ReparentToDefaultAndHide(unityHwnd);
+                return;
+            }
+
+            // 普通 Visibility 切页只隐藏窗口，保持它始终挂在稳定的 HwndHost 下。
+            // 这样重新进入页面时不会反复 SetParent，也不会触发 Unity 交换链重建。
+            if (IsWindowVisible(unityHwnd))
+            {
+                HideWindowCore(unityHwnd);
+            }
+
+            lock (_stateLock)
+            {
+                _isAppliedVisible = false;
+            }
+        }
+
+        private static bool HasExpectedClientSize(nint unityHwnd, int expectedWidth, int expectedHeight)
+        {
+            if (!GetClientRect(unityHwnd, out WindowRect clientRect))
+            {
+                return false;
+            }
+
+            int actualWidth = Math.Max(0, clientRect.Right - clientRect.Left);
+            int actualHeight = Math.Max(0, clientRect.Bottom - clientRect.Top);
+            return Math.Abs(actualWidth - Math.Max(1, expectedWidth)) <= 1 &&
+                   Math.Abs(actualHeight - Math.Max(1, expectedHeight)) <= 1;
+        }
+
+        private static bool IsUnityGraphicsReady(nint unityHwnd)
+        {
+            return (GetWindowUserData(unityHwnd).ToInt64() & 0x1L) != 0;
         }
 
 
@@ -632,33 +976,10 @@ namespace CombatSimulation.Services.Unity
             }
         }
 
-        /// <summary>
-        /// 显示后主动把输入焦点交给 Unity 子窗口。
-        /// Unity 内部 UI 按钮依赖窗口焦点处理鼠标事件，长期使用 SW_SHOWNA/SWP_NOACTIVATE 会导致画面可见但按钮无响应。
-        /// </summary>
-        private static void FocusUnityWindowCore(nint unityHwnd)
-        {
-            if (unityHwnd == 0 || !IsWindow(unityHwnd))
-            {
-                return;
-            }
-
-            BringWindowToTop(unityHwnd);
-            SetActiveWindow(unityHwnd);
-            SetFocus(unityHwnd);
-        }
-
         private static void HideWindowCore(nint unityHwnd)
         {
+            // 隐藏时保留最后一次有效尺寸，避免 Unity/D3D 交换链在快速切页期间反复经历 1x1 resize。
             ShowWindow(unityHwnd, SwHide);
-            SetWindowPos(
-                unityHwnd,
-                HwndTop,
-                0,
-                0,
-                1,
-                1,
-                SwpNoZOrder | SwpNoActivate | SwpFrameChanged | SwpHideWindow);
         }
 
         private static nint FindTopLevelWindowByProcessId(int processId)
@@ -735,6 +1056,13 @@ namespace CombatSimulation.Services.Unity
                 : GetWindowLong32(hWnd, GwlExStyle);
         }
 
+        private static nint GetWindowUserData(nint hWnd)
+        {
+            return IntPtr.Size == 8
+                ? GetWindowLongPtr64(hWnd, GwlpUserData)
+                : GetWindowLong32(hWnd, GwlpUserData);
+        }
+
         private static nint SetWindowExtendedStyle(nint hWnd, nint style)
         {
             return IntPtr.Size == 8
@@ -756,9 +1084,13 @@ namespace CombatSimulation.Services.Unity
             int Height,
             bool HasHostBounds,
             bool ShouldBeVisible,
+            bool DetachFromHostWhenHidden,
             bool IsStopping,
             DateTime HiddenPreparationDeadlineUtc,
+            DateTime VisiblePreparationDeadlineUtc,
             long Version);
+
+        private readonly record struct VisibleApplyResult(bool Applied, long Version);
 
         private readonly record struct WindowCandidate(
             nint Hwnd,
@@ -776,6 +1108,7 @@ namespace CombatSimulation.Services.Unity
         }
 
         private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+        private delegate bool EnumChildWindowsProc(nint hWnd, nint lParam);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(
@@ -786,12 +1119,6 @@ namespace CombatSimulation.Services.Unity
             int cx,
             int cy,
             uint flags);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool MoveWindow(nint hWnd, int x, int y, int width, int height, bool repaint);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool UpdateWindow(nint hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern nint SetParent(nint hWndChild, nint hWndNewParent);
@@ -806,15 +1133,6 @@ namespace CombatSimulation.Services.Unity
         private static extern bool EnableWindow(nint hWnd, bool enable);
 
         [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool BringWindowToTop(nint hWnd);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern nint SetActiveWindow(nint hWnd);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern nint SetFocus(nint hWnd);
-
-        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool IsWindow(nint hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -822,6 +1140,9 @@ namespace CombatSimulation.Services.Unity
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool EnumWindows(EnumWindowsProc enumProc, nint lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool EnumChildWindows(nint hWndParent, EnumChildWindowsProc enumProc, nint lParam);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowThreadProcessId(nint hWnd, out int processId);

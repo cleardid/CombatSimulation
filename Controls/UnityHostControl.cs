@@ -33,6 +33,8 @@ public sealed class UnityHostControl : HwndHost
 
     private nint _hostHwnd;
     private bool _boundsNotificationPending;
+    private int _appliedNativeWidth;
+    private int _appliedNativeHeight;
 
     /// <summary>
     /// 原生宿主窗口句柄。句柄尚未创建或已经销毁时为 0。
@@ -43,6 +45,11 @@ public sealed class UnityHostControl : HwndHost
     /// 原生宿主 HWND 创建或销毁时触发。
     /// </summary>
     public event EventHandler? NativeHostChanged;
+
+    /// <summary>
+    /// 原生宿主 HWND 即将销毁时触发。处理程序可在句柄仍有效时先移走其外部子窗口。
+    /// </summary>
+    public event EventHandler? NativeHostDestroying;
 
     /// <summary>
     /// 原生宿主 HWND 的位置或尺寸由 WPF 布局系统调整后触发。
@@ -107,7 +114,10 @@ public sealed class UnityHostControl : HwndHost
     protected override void DestroyWindowCore(HandleRef hwnd)
     {
         nint handle = hwnd.Handle;
+        NativeHostDestroying?.Invoke(this, EventArgs.Empty);
         _hostHwnd = 0;
+        _appliedNativeWidth = 0;
+        _appliedNativeHeight = 0;
         NativeHostChanged?.Invoke(this, EventArgs.Empty);
 
         if (handle != 0 && IsWindow(handle))
@@ -169,14 +179,23 @@ public sealed class UnityHostControl : HwndHost
         int width = Math.Max(1, (int)Math.Round(ActualWidth * transformToDevice.M11));
         int height = Math.Max(1, (int)Math.Round(ActualHeight * transformToDevice.M22));
 
-        SetWindowPos(
-            _hostHwnd,
-            HwndTop,
-            0,
-            0,
-            width,
-            height,
-            SwpNoMove | SwpNoZOrder | SwpNoActivate);
+        if (_appliedNativeWidth == width && _appliedNativeHeight == height)
+        {
+            return;
+        }
+
+        if (SetWindowPos(
+                _hostHwnd,
+                HwndTop,
+                0,
+                0,
+                width,
+                height,
+                SwpNoMove | SwpNoZOrder | SwpNoActivate))
+        {
+            _appliedNativeWidth = width;
+            _appliedNativeHeight = height;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]

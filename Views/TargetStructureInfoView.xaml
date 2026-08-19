@@ -449,6 +449,7 @@
                                                 VerticalAlignment="Stretch"
                                                 Focusable="False"
                                                 NativeHostChanged="OnUnityNativeHostChanged"
+                                                NativeHostDestroying="OnUnityNativeHostDestroying"
                                                 NativeHostBoundsChanged="OnUnityNativeHostBoundsChanged" />
             </Border>
 

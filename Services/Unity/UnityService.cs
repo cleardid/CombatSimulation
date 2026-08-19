@@ -16,6 +16,7 @@ public sealed class UnityService : IAsyncDisposable
     private static readonly TimeSpan StartupRetryInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan StartupHostWaitTimeout = TimeSpan.FromSeconds(3);
 
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
     private readonly SemaphoreSlim _reconnectLock = new(1, 1);
@@ -24,6 +25,12 @@ public sealed class UnityService : IAsyncDisposable
     private readonly UnityTcpClient _tcpClient = new();
     private readonly UnityProcessManager _processManager = new();
     private readonly UnityWindowHost _windowHost;
+    private readonly object _startupParentLock = new();
+
+    private TaskCompletionSource<nint> _startupHostAvailable = CreateStartupHostCompletion();
+    private nint _defaultParentHwnd;
+    private nint _preferredHostHwnd;
+
 
     private bool _disposed;
     private bool _stopping;
@@ -72,7 +79,7 @@ public sealed class UnityService : IAsyncDisposable
                 return;
             }
 
-            StartProcessAndPrepareWindow();
+            await StartProcessAndPrepareWindowAsync(effectiveToken).ConfigureAwait(false);
             await ConnectWithRetryAsync(StartupConnectTimeout, effectiveToken).ConfigureAwait(false);
         }
         finally
@@ -208,6 +215,11 @@ public sealed class UnityService : IAsyncDisposable
     /// </summary>
     public void SetDefaultParentWindow(nint parentHwnd)
     {
+        lock (_startupParentLock)
+        {
+            _defaultParentHwnd = parentHwnd;
+        }
+
         _windowHost.SetDefaultParentWindow(parentHwnd);
 
         if (parentHwnd != 0 && _processManager.IsRunning && !_shutdownCts.IsCancellationRequested)
@@ -230,6 +242,7 @@ public sealed class UnityService : IAsyncDisposable
             return;
         }
 
+        RegisterPreferredHost(parentHwnd);
         _windowHost.SetHostBounds(parentHwnd, x, y, width, height);
     }
 
@@ -240,7 +253,7 @@ public sealed class UnityService : IAsyncDisposable
     {
         ThrowIfDisposed();
 
-        _processManager.StartIfNeeded();
+        _processManager.StartIfNeeded(GetPreferredStartupParent());
         await _windowHost.ShowAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -271,6 +284,16 @@ public sealed class UnityService : IAsyncDisposable
         _windowHost.Hide();
     }
 
+    /// <summary>
+    /// 原生宿主 HWND 即将销毁时，将 Unity 窗口安全地脱离该宿主。
+    /// 普通页面 Visibility 切换只应调用 <see cref="HideUnityWindow"/>。
+    /// </summary>
+    public void DetachUnityWindowFromHost(nint hostHwnd)
+    {
+        _windowHost.DetachFromHost(hostHwnd);
+        UnregisterPreferredHost(hostHwnd);
+    }
+
     private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         if (IsConnected)
@@ -281,13 +304,99 @@ public sealed class UnityService : IAsyncDisposable
         await StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private void StartProcessAndPrepareWindow()
+    private async Task StartProcessAndPrepareWindowAsync(CancellationToken cancellationToken)
     {
-        _processManager.StartIfNeeded();
+        nint startupParent = await WaitForStartupParentAsync(cancellationToken).ConfigureAwait(false);
+        _processManager.StartIfNeeded(startupParent);
         if (!_shutdownCts.IsCancellationRequested)
         {
             _ = _windowHost.PrepareHiddenAsync(_shutdownCts.Token);
         }
+    }
+
+    // Prefer the real HwndHost used by the target-structure view. If that view is not
+    // created, fall back to the main WPF window after a short bounded wait.
+    private async Task<nint> WaitForStartupParentAsync(CancellationToken cancellationToken)
+    {
+        Task<nint> hostTask;
+        nint fallbackParent;
+
+        lock (_startupParentLock)
+        {
+            if (_preferredHostHwnd != 0)
+            {
+                return _preferredHostHwnd;
+            }
+
+            hostTask = _startupHostAvailable.Task;
+            fallbackParent = _defaultParentHwnd;
+        }
+
+        try
+        {
+            return await hostTask.WaitAsync(StartupHostWaitTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            lock (_startupParentLock)
+            {
+                if (_preferredHostHwnd != 0)
+                {
+                    return _preferredHostHwnd;
+                }
+
+                return _defaultParentHwnd != 0 ? _defaultParentHwnd : fallbackParent;
+            }
+        }
+    }
+
+    private void RegisterPreferredHost(nint hostHwnd)
+    {
+        if (hostHwnd == 0)
+        {
+            return;
+        }
+
+        TaskCompletionSource<nint> completion;
+        lock (_startupParentLock)
+        {
+            _preferredHostHwnd = hostHwnd;
+            completion = _startupHostAvailable;
+        }
+
+        completion.TrySetResult(hostHwnd);
+    }
+
+    private void UnregisterPreferredHost(nint hostHwnd)
+    {
+        if (hostHwnd == 0)
+        {
+            return;
+        }
+
+        lock (_startupParentLock)
+        {
+            if (_preferredHostHwnd != hostHwnd)
+            {
+                return;
+            }
+
+            _preferredHostHwnd = 0;
+            _startupHostAvailable = CreateStartupHostCompletion();
+        }
+    }
+
+    private nint GetPreferredStartupParent()
+    {
+        lock (_startupParentLock)
+        {
+            return _preferredHostHwnd != 0 ? _preferredHostHwnd : _defaultParentHwnd;
+        }
+    }
+
+    private static TaskCompletionSource<nint> CreateStartupHostCompletion()
+    {
+        return new TaskCompletionSource<nint>(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async Task ConnectWithRetryAsync(TimeSpan timeout, CancellationToken cancellationToken)
@@ -391,7 +500,7 @@ public sealed class UnityService : IAsyncDisposable
                             return;
                         }
 
-                        StartProcessAndPrepareWindow();
+                        await StartProcessAndPrepareWindowAsync(_shutdownCts.Token).ConfigureAwait(false);
                         await _tcpClient.ConnectAsync(_shutdownCts.Token).ConfigureAwait(false);
                         return;
                     }

@@ -15,9 +15,28 @@ namespace CombatSimulation;
 /// </summary>
 public partial class App : Application
 {
+    private const string SingleInstanceMutexName = "Local\\CombatSimulation.Wpf.SingleInstance";
+
+    private Mutex? _singleInstanceMutex;
+    private bool _ownsSingleInstanceMutex;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool createdNew);
+        _ownsSingleInstanceMutex = createdNew;
+
+        if (!createdNew)
+        {
+            MessageBox.Show(
+                "\u5E94\u7528\u7A0B\u5E8F\u5DF2\u7ECF\u5728\u8FD0\u884C\uFF0C\u8BF7\u4F7F\u7528\u73B0\u6709\u7A97\u53E3\u3002",
+                "\u7A0B\u5E8F\u5DF2\u8FD0\u884C",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
 
         // 手动创建主窗口。App.xaml 中不再使用 StartupUri，避免窗口创建早于全局 UnityService 初始化。
         var mainWindow = new MainWindow();
@@ -58,6 +77,15 @@ public partial class App : Application
         }
 
         // 调用基类退出方法
+        if (_ownsSingleInstanceMutex)
+        {
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+
+        _singleInstanceMutex?.Dispose();
+        _singleInstanceMutex = null;
+        _ownsSingleInstanceMutex = false;
+
         base.OnExit(e);
     }
 
