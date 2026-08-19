@@ -731,7 +731,7 @@
 
                 <!-- 第一模块：目标信息 -->
                 <Grid Visibility="{Binding TargetInfoVisibility}">
-                    <views:TargetInfoView />
+                    <views:TargetInfoView x:Name="TargetInfoModule" />
                 </Grid>
 
                 <!-- 第二模块：推演设定 -->

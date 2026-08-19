@@ -10,9 +10,10 @@ namespace CombatSimulation.Services.Unity;
 /// 该类只负责把 WPF 侧的业务调用转换为 Unity TCP 协议消息，
 /// 不直接参与界面状态维护和数据库更新。
 /// </remarks>
-public sealed class UnityCommandService : IUnityCommandService
+public sealed class UnityCommandService : IUnityCommandService, IDisposable
 {
     private readonly UnityService _unityService;
+    private bool _disposed;
 
     /// <summary>
     /// Unity 主动上报 event 时触发。
@@ -24,7 +25,7 @@ public sealed class UnityCommandService : IUnityCommandService
     /// </summary>
     public UnityCommandService(UnityService unityService)
     {
-        _unityService = unityService;
+        _unityService = unityService ?? throw new ArgumentNullException(nameof(unityService));
         _unityService.EventReceived += OnUnityEventReceived;
     }
 
@@ -93,6 +94,22 @@ public sealed class UnityCommandService : IUnityCommandService
             string message = response.Error?.Message ?? $"Unity 命令执行失败：{command}";
             throw new InvalidOperationException(message);
         }
+    }
+
+    /// <summary>
+    /// 解除对长生命周期 UnityService 的事件订阅。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _unityService.EventReceived -= OnUnityEventReceived;
+        EventReceived = null;
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>

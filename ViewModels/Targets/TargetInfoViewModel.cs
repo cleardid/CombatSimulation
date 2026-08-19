@@ -17,7 +17,7 @@ namespace CombatSimulation.ViewModels;
 /// 该类通过 partial 文件拆分为数据加载、命令、树结构、详情刷新、Unity 通信和增删改业务几部分，
 /// 以降低单个文件的复杂度。主文件只保留跨文件共享的字段、集合、属性和事件声明。
 /// </remarks>
-public sealed partial class TargetInfoViewModel : ObservableObject
+public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
 {
     private const string StructureInfoPanel = "目标结构信息";
     private const string DamageTreeInfoPanel = "毁伤树信息";
@@ -26,6 +26,8 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     private readonly MySqlTargetInfoRepository _targetInfoRepository;
     private readonly MySqlDamageTreeRepository _damageTreeRepository;
     private readonly IUnityCommandService _unityCommandService;
+    private readonly bool _ownsUnityCommandService;
+    private bool _disposed;
     private TargetInfoItem? _checkStateSubscriptionTarget;
     private CancellationTokenSource? _targetSelectionCts;
     private CancellationTokenSource? _partHighlightCts;
@@ -44,7 +46,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     /// 生产运行时直接创建 MySQL 仓储和 Unity 命令服务；测试时可使用另一个构造函数注入替代对象。
     /// </remarks>
     public TargetInfoViewModel()
-        : this(new MySqlTargetInfoRepository(), new MySqlDamageTreeRepository(), new UnityCommandService(UnityService.Instance))
+        : this(new MySqlTargetInfoRepository(), new MySqlDamageTreeRepository(), new UnityCommandService(UnityService.Instance), ownsUnityCommandService: true)
     {
     }
 
@@ -63,10 +65,20 @@ public sealed partial class TargetInfoViewModel : ObservableObject
         MySqlTargetInfoRepository targetInfoRepository,
         MySqlDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService)
+        : this(targetInfoRepository, damageTreeRepository, unityCommandService, ownsUnityCommandService: false)
     {
-        _targetInfoRepository = targetInfoRepository;
-        _damageTreeRepository = damageTreeRepository;
-        _unityCommandService = unityCommandService;
+    }
+
+    private TargetInfoViewModel(
+        MySqlTargetInfoRepository targetInfoRepository,
+        MySqlDamageTreeRepository damageTreeRepository,
+        IUnityCommandService unityCommandService,
+        bool ownsUnityCommandService)
+    {
+        _targetInfoRepository = targetInfoRepository ?? throw new ArgumentNullException(nameof(targetInfoRepository));
+        _damageTreeRepository = damageTreeRepository ?? throw new ArgumentNullException(nameof(damageTreeRepository));
+        _unityCommandService = unityCommandService ?? throw new ArgumentNullException(nameof(unityCommandService));
+        _ownsUnityCommandService = ownsUnityCommandService;
 
         // 先订阅 Unity 事件，避免初始化数据库期间错过 Unity 的 server_ready 通知。
         _unityCommandService.EventReceived += OnUnityEventReceived;
@@ -88,6 +100,11 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     {
         lock (_initializationSync)
         {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(TargetInfoViewModel));
+            }
+
             return _initializationTask ??= LoadTargetsFromRepositoryAsync();
         }
     }
@@ -291,4 +308,40 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     /// </summary>
     public Visibility DamageTreeInfoVisibility =>
         IsDamageTreeInfoSelected ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// 取消后台同步并解除所有长生命周期事件订阅。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _unityCommandService.EventReceived -= OnUnityEventReceived;
+        DetachCheckStateHandlers(_checkStateSubscriptionTarget);
+        _checkStateSubscriptionTarget = null;
+
+        _targetSelectionCts?.Cancel();
+        _targetSelectionCts?.Dispose();
+        _targetSelectionCts = null;
+
+        _partHighlightCts?.Cancel();
+        _partHighlightCts?.Dispose();
+        _partHighlightCts = null;
+
+        // 这三个来源由对应后台任务在 finally 中释放；这里只发出取消信号。
+        _checkedPartSyncCts?.Cancel();
+        _databaseSnapshotSyncCts?.Cancel();
+        _damageTreeLoadCts?.Cancel();
+
+        if (_ownsUnityCommandService && _unityCommandService is IDisposable disposableService)
+        {
+            disposableService.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
 }

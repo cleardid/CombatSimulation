@@ -9,9 +9,10 @@ namespace CombatSimulation.Views;
 /// 负责初始化 TargetInfoView，并承接必须由 View 完成的弹窗和确认框交互。
 /// 按钮本身通过 Command 绑定到 TargetInfoViewModel，不再在 XAML 中直接挂业务 Click。
 /// </summary>
-public partial class TargetInfoView : UserControl
+public partial class TargetInfoView : UserControl, IDisposable
 {
     private TargetInfoViewModel? _attachedViewModel;
+    private bool _disposed;
 
     public TargetInfoView()
     {
@@ -37,7 +38,29 @@ public partial class TargetInfoView : UserControl
         {
             await viewModel.InitializeAsync();
         }
+
     }
+    /// <summary>
+    /// 解除 View 事件并释放由 XAML 创建的目标视图模型。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Loaded -= OnLoaded;
+        DataContextChanged -= OnDataContextChanged;
+
+        TargetInfoViewModel? viewModel = _attachedViewModel;
+        DetachViewModel(viewModel);
+        _attachedViewModel = null;
+        viewModel?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
 
     private void AttachViewModel(TargetInfoViewModel? viewModel)
     {
