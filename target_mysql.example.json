@@ -1,0 +1,8 @@
+{
+  "Server": "127.0.0.1",
+  "Port": 3306,
+  "User_Id": "combat_app",
+  "Password": "CHANGE_ME",
+  "Db_name": "combat_simulation",
+  "ConnectionTimeout": 5
+}

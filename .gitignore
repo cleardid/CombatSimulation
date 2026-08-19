@@ -56,6 +56,9 @@ cases/
 # --- 5. 杂项 ---
 # 排除操作系统产生的缩略图等
 .DS_Store
+
+# MySQL 本地连接配置包含账号和密码，仅提交无密钥示例。
+target_mysql.json
 Thumbs.db
 
 .codex-tmp/
