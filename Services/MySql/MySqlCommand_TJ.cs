@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using CombatSimulation.MySQLClassBase;
@@ -441,6 +442,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"SelectBySql<{GetTableName<T>()}> 出错：{ex.Message}");
+            throw new InvalidOperationException($"读取数据表 {GetTableName<T>()} 失败。", ex);
         }
 
         return list;
@@ -484,7 +486,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return new List<T>();
+            throw new ArgumentException("存储过程名称不能为空。", nameof(name));
         }
 
         EnsureCommandReady();
@@ -507,6 +509,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"CALL {name} 出错：{ex.Message}");
+            throw new InvalidOperationException($"调用存储过程 {name} 读取数据失败。", ex);
         }
 
         return list;
@@ -519,7 +522,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
     {
         if (string.IsNullOrWhiteSpace(param))
         {
-            return -1;
+            throw new ArgumentException("存储过程调用不能为空。", nameof(param));
         }
 
         EnsureCommandReady();
@@ -534,7 +537,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"CALL {param} 出错：{ex.Message}");
-            return -1;
+            throw new InvalidOperationException($"调用存储过程 {param} 写入数据失败。", ex);
         }
     }
 
@@ -557,7 +560,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"GetMaxIndex 出错：{ex.Message}");
-            return -1;
+            throw new InvalidOperationException($"读取数据表 {tableName} 的最大索引失败。", ex);
         }
     }
 
@@ -568,7 +571,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
     {
         if (string.IsNullOrWhiteSpace(param))
         {
-            return new List<T>();
+            throw new ArgumentException("存储过程调用不能为空。", nameof(param));
         }
 
         EnsureCommandReady();
@@ -591,6 +594,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"GetFragments 出错：{ex.Message}");
+            throw new InvalidOperationException($"调用存储过程 {param} 读取分片失败。", ex);
         }
 
         return list;
@@ -625,7 +629,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         catch (Exception ex)
         {
             MySqlLog.LogWarning($"DataReaderToData() 转换出错，类型 {typeof(T).Name}，具体消息为：{ex.Message}");
-            return null;
+            throw new InvalidDataException($"无法把数据库记录转换为 {typeof(T).Name}。", ex);
         }
     }
 
