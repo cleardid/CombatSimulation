@@ -56,6 +56,22 @@ public sealed class LoadAndWriteDb : IDisposable
     }
 
     /// <summary>
+    /// 在单个 MySQL 事务内执行一个原子业务操作。
+    /// </summary>
+    public void ExecuteInTransaction(Action operation)
+    {
+        mySqlCommand_TJ.ExecuteInTransaction(operation);
+    }
+
+    /// <summary>
+    /// 在单个 MySQL 事务内执行一个带返回值的原子业务操作。
+    /// </summary>
+    public TResult ExecuteInTransaction<TResult>(Func<TResult> operation)
+    {
+        return mySqlCommand_TJ.ExecuteInTransaction(operation);
+    }
+
+    /// <summary>
     /// 判断某个表是否存在，不存在则添加，存在则跳过。
     /// 保留该方法名是为了兼容原 Unity 端调用；新代码建议直接使用 CreateTable。
     /// </summary>

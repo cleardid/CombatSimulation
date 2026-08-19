@@ -108,6 +108,59 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         _sqlComm.Parameters.AddWithValue("@TableName", GetTableName<T>());
         return Convert.ToInt32(_sqlComm.ExecuteScalar()) != 0;
     }
+    /// <summary>
+    /// 在当前连接上执行一个原子业务操作。发生异常时回滚全部数据库修改。
+    /// </summary>
+    public void ExecuteInTransaction(Action operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ExecuteInTransaction(() =>
+        {
+            operation();
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// 在当前连接上执行一个带返回值的原子业务操作。发生异常时回滚全部数据库修改。
+    /// </summary>
+    public TResult ExecuteInTransaction<TResult>(Func<TResult> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        EnsureCommandReady();
+
+        // 允许仓储方法组合其他已经声明事务边界的方法，避免创建嵌套事务。
+        if (_sqlComm!.Transaction != null)
+        {
+            return operation();
+        }
+
+        using MySqlTransaction transaction = _sqlConn.BeginTransaction();
+        _sqlComm.Transaction = transaction;
+        try
+        {
+            TResult result = operation();
+            transaction.Commit();
+            return result;
+        }
+        catch
+        {
+            try
+            {
+                transaction.Rollback();
+            }
+            catch (Exception rollbackException)
+            {
+                MySqlLog.LogWarning($"MySQL 事务回滚失败：{rollbackException.Message}");
+            }
+
+            throw;
+        }
+        finally
+        {
+            _sqlComm.Transaction = null;
+        }
+    }
 
     /// <summary>
     /// 插入或更新单条数据，根据主键进行替换。
@@ -121,7 +174,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         }
 
         EnsureCommandReady();
-        CreateTable<T>();
+        EnsureTableOutsideTransaction<T>();
 
         List<PropertyInfo> properties = GetCachedProperties<T>();
         List<string> columnNames = properties.Select(p => GetAttribute(p).FieldName).ToList();
@@ -332,7 +385,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
     public List<T> SelectBySql<T>(string sqlCondition = "") where T : MySQLClassBaseClass
     {
         EnsureCommandReady();
-        CreateTable<T>();
+        EnsureTableOutsideTransaction<T>();
 
         _sqlComm!.CommandText = string.IsNullOrWhiteSpace(sqlCondition)
             ? $"SELECT * FROM `{GetTableName<T>()}`;"
@@ -371,7 +424,7 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         }
 
         EnsureCommandReady();
-        CreateTable<T>();
+        EnsureTableOutsideTransaction<T>();
 
         _sqlComm!.CommandText = $"SELECT * FROM `{GetTableName<T>()}` WHERE `{fieldName}` = @Value;";
         _sqlComm.Parameters.Clear();
@@ -654,6 +707,17 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         EnsureConnectionOpen();
         _sqlComm ??= new MySqlCommand { Connection = _sqlConn };
         _sqlComm.Connection ??= _sqlConn;
+    }
+    /// <summary>
+    /// DDL 在 MySQL 中可能隐式提交事务，因此只允许在事务开始前执行自动建表。
+    /// 仓储层会在开启事务前统一确认所需表已经存在。
+    /// </summary>
+    private void EnsureTableOutsideTransaction<T>() where T : MySQLClassBaseClass
+    {
+        if (_sqlComm?.Transaction == null)
+        {
+            CreateTable<T>();
+        }
     }
 
     protected override void Dispose(bool disposing)

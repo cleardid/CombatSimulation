@@ -131,6 +131,8 @@ public sealed class MySqlTargetInfoRepository
 
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         List<Target_System_Info_By_MySQL> systems = db.mySqlCommand_TJ.SelectByField<Target_System_Info_By_MySQL>("t_s_TargetCode", targetCode);
         foreach (string systemCode in systems.Select(item => item.SystemCode).Where(code => !string.IsNullOrWhiteSpace(code)).Distinct(StringComparer.Ordinal))
@@ -151,6 +153,7 @@ public sealed class MySqlTargetInfoRepository
         }
 
         db.mySqlCommand_TJ.DeleteByID<Target_Info_By_MySQL>(targetCode);
+        });
     }
 
     /// <summary>
@@ -170,6 +173,8 @@ public sealed class MySqlTargetInfoRepository
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         if (!string.Equals(originalSystemCode, system.SystemCode, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(originalSystemCode))
         {
@@ -198,6 +203,7 @@ public sealed class MySqlTargetInfoRepository
         }
 
         db.mySqlCommand_TJ.Insert(ToMySqlSystem(system));
+        });
     }
 
     /// <summary>
@@ -212,6 +218,8 @@ public sealed class MySqlTargetInfoRepository
 
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        return db.ExecuteInTransaction(() =>
+        {
 
         List<Target_System_Info_By_MySQL> allSystems = db.mySqlCommand_TJ.SelectByField<Target_System_Info_By_MySQL>("t_s_TargetCode", targetCode);
         HashSet<string> codesToDelete = CollectDescendantSystemCodes(systemCode, allSystems);
@@ -243,6 +251,7 @@ public sealed class MySqlTargetInfoRepository
         }
 
         return null;
+        });
     }
 
     /// <summary>
@@ -262,6 +271,8 @@ public sealed class MySqlTargetInfoRepository
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         string normalizedOriginalPartCode = originalPartCode?.Trim() ?? string.Empty;
         string normalizedNewPartCode = part.PartCode?.Trim() ?? string.Empty;
@@ -288,6 +299,7 @@ public sealed class MySqlTargetInfoRepository
         {
             db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(normalizedOriginalPartCode);
         }
+        });
     }
 
 
@@ -427,6 +439,8 @@ public sealed class MySqlTargetInfoRepository
     /// </remarks>
     private static void EnsureGuidIdentifiers(LoadAndWriteDb db)
     {
+        db.ExecuteInTransaction(() =>
+        {
         List<Target_Info_By_MySQL> targetRows = db.GetTableData<Target_Info_By_MySQL>();
         List<Target_System_Info_By_MySQL> systemRows = db.GetTableData<Target_System_Info_By_MySQL>();
         List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
@@ -487,6 +501,7 @@ public sealed class MySqlTargetInfoRepository
         }
 
         MySqlLog.Log("旧版非 GUID 唯一标识迁移完成。 ");
+        });
     }
 
     private static Dictionary<string, string> CreateGuidCodeMap(string scope, IEnumerable<string?> codes)

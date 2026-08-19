@@ -99,12 +99,15 @@ public sealed class MySqlDamageTreeRepository
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         db.mySqlCommand_TJ.Insert(ToMySqlTree(tree));
         foreach (DamageTreeNodeItem node in EnumerateNodes(tree.RootNodes))
         {
             db.mySqlCommand_TJ.Insert(ToMySqlNode(node));
         }
+        });
     }
 
     /// <summary>
@@ -114,12 +117,15 @@ public sealed class MySqlDamageTreeRepository
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         db.mySqlCommand_TJ.Insert(ToMySqlTree(tree));
         foreach (DamageTreeNodeItem node in EnumerateNodes(tree.RootNodes))
         {
             db.mySqlCommand_TJ.Insert(ToMySqlNode(node));
         }
+        });
     }
 
     /// <summary>
@@ -134,9 +140,12 @@ public sealed class MySqlDamageTreeRepository
 
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         db.mySqlCommand_TJ.DeleteByField<Damage_Node_Info_By_MySQL>("d_n_TreeCode", damageTreeCode);
         db.mySqlCommand_TJ.DeleteByID<Damage_Tree_Info_By_MySQL>(damageTreeCode);
+        });
     }
 
     /// <summary>
@@ -156,6 +165,8 @@ public sealed class MySqlDamageTreeRepository
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         if (!string.Equals(originalNodeCode, node.NodeCode, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(originalNodeCode))
         {
@@ -173,6 +184,7 @@ public sealed class MySqlDamageTreeRepository
         }
 
         db.mySqlCommand_TJ.Insert(ToMySqlNode(node));
+        });
     }
 
     /// <summary>
@@ -187,6 +199,8 @@ public sealed class MySqlDamageTreeRepository
 
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
+        db.ExecuteInTransaction(() =>
+        {
 
         List<Damage_Node_Info_By_MySQL> allRows = db.mySqlCommand_TJ.SelectByField<Damage_Node_Info_By_MySQL>("d_n_TreeCode", damageTreeCode);
         HashSet<string> codesToDelete = CollectDescendantNodeCodes(nodeCode, allRows);
@@ -194,6 +208,7 @@ public sealed class MySqlDamageTreeRepository
         {
             db.mySqlCommand_TJ.DeleteByID<Damage_Node_Info_By_MySQL>(code);
         }
+        });
     }
 
     /// <summary>
@@ -250,6 +265,8 @@ public sealed class MySqlDamageTreeRepository
     /// </summary>
     private static void EnsureGuidIdentifiers(LoadAndWriteDb db)
     {
+        db.ExecuteInTransaction(() =>
+        {
         List<Damage_Tree_Info_By_MySQL> treeRows = db.GetTableData<Damage_Tree_Info_By_MySQL>();
         List<Damage_Node_Info_By_MySQL> nodeRows = db.GetTableData<Damage_Node_Info_By_MySQL>();
 
@@ -292,6 +309,7 @@ public sealed class MySqlDamageTreeRepository
         }
 
         MySqlLog.Log("旧版非 GUID 毁伤树标识迁移完成。 ");
+        });
     }
 
     private static IReadOnlyList<DamageTreeInfoItem> BuildDamageTrees(
