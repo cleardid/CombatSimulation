@@ -25,7 +25,6 @@ namespace CombatSimulation.Services.Unity
         private const int GwlExStyle = -20;
         private const int GwlpUserData = -21;
         private const long WsChild = 0x40000000L;
-        private const long WsVisible = 0x10000000L;
         private const long WsDisabled = 0x08000000L;
         private const long WsPopup = unchecked((long)0x80000000);
         private const long WsCaption = 0x00C00000L;
@@ -55,8 +54,6 @@ namespace CombatSimulation.Services.Unity
         private nint _unityWindowHwnd;
         private nint _attachedParentHwnd;
 
-        private int _hostX;
-        private int _hostY;
         private int _hostWidth;
         private int _hostHeight;
 
@@ -72,8 +69,6 @@ namespace CombatSimulation.Services.Unity
 
         private nint _appliedUnityWindowHwnd;
         private nint _appliedParentHwnd;
-        private int _appliedX;
-        private int _appliedY;
         private int _appliedWidth;
         private int _appliedHeight;
         private bool _isAppliedVisible;
@@ -82,11 +77,6 @@ namespace CombatSimulation.Services.Unity
         {
             _getRunningProcess = getRunningProcess;
         }
-
-        /// <summary>
-        /// 窗口托管日志事件。
-        /// </summary>
-        public event EventHandler<string>? LogReceived;
 
         /// <summary>
         /// 设置默认父窗口。Unity 隐藏时会被重新挂回该窗口，防止临时宿主 HWND 销毁时影响 Unity 窗口。
@@ -110,10 +100,7 @@ namespace CombatSimulation.Services.Unity
         /// <summary>
         /// 设置 Unity 当前应该显示到的原生宿主区域。
         /// </summary>
-        /// <remarks>
-        /// 推荐传入 HwndHost 创建的宿主 HWND，并使用 x=0、y=0、width=宿主客户区宽度、height=宿主客户区高度。
-        /// </remarks>
-        public void SetHostBounds(nint parentHwnd, int x, int y, int width, int height)
+        public void SetHostBounds(nint parentHwnd, int width, int height)
         {
             if (parentHwnd == 0 || width <= 0 || height <= 0)
             {
@@ -124,8 +111,6 @@ namespace CombatSimulation.Services.Unity
             {
                 if (_hasHostBounds &&
                     _hostParentHwnd == parentHwnd &&
-                    _hostX == x &&
-                    _hostY == y &&
                     _hostWidth == width &&
                     _hostHeight == height)
                 {
@@ -133,8 +118,6 @@ namespace CombatSimulation.Services.Unity
                 }
 
                 _hostParentHwnd = parentHwnd;
-                _hostX = x;
-                _hostY = y;
                 _hostWidth = width;
                 _hostHeight = height;
                 _hasHostBounds = true;
@@ -290,8 +273,6 @@ namespace CombatSimulation.Services.Unity
                 _detachFromHostWhenHidden = false;
                 _hasHostBounds = false;
                 _hostParentHwnd = 0;
-                _hostX = 0;
-                _hostY = 0;
                 _hostWidth = 0;
                 _hostHeight = 0;
                 _unityWindowHwnd = 0;
@@ -477,13 +458,11 @@ namespace CombatSimulation.Services.Unity
                 // 这里不完全信任视图层传入的宽高。HwndHost 的原生子窗口可能先以旧尺寸创建，
                 // 随后才被 WPF 布局系统调整。每次显示收敛时直接读取当前父 HWND 的客户区，
                 // 可以避免 Unity 偶发只占左侧一部分区域。
-                GetEffectiveHostBounds(snapshot, out int x, out int y, out int width, out int height);
+                GetEffectiveHostSize(snapshot, out int width, out int height);
                 bool parentChanged = GetParent(unityHwnd) != snapshot.ParentHwnd || _attachedParentHwnd != snapshot.ParentHwnd;
                 bool boundsChanged =
                     _appliedUnityWindowHwnd != unityHwnd ||
                     _appliedParentHwnd != snapshot.ParentHwnd ||
-                    _appliedX != x ||
-                    _appliedY != y ||
                     _appliedWidth != width ||
                     _appliedHeight != height;
                 bool wasVisible = IsWindowVisible(unityHwnd);
@@ -497,8 +476,6 @@ namespace CombatSimulation.Services.Unity
                 {
                     ShowWindowAt(
                         unityHwnd,
-                        x,
-                        y,
                         width,
                         height,
                         frameChanged: parentChanged);
@@ -515,8 +492,6 @@ namespace CombatSimulation.Services.Unity
                 {
                     _appliedUnityWindowHwnd = unityHwnd;
                     _appliedParentHwnd = snapshot.ParentHwnd;
-                    _appliedX = x;
-                    _appliedY = y;
                     _appliedWidth = width;
                     _appliedHeight = height;
                     _isAppliedVisible = true;
@@ -632,8 +607,6 @@ namespace CombatSimulation.Services.Unity
             {
                 return new HostStateSnapshot(
                     _hostParentHwnd,
-                    _hostX,
-                    _hostY,
                     Math.Max(1, _hostWidth),
                     Math.Max(1, _hostHeight),
                     _hasHostBounds && _hostParentHwnd != 0,
@@ -672,8 +645,6 @@ namespace CombatSimulation.Services.Unity
         {
             _appliedUnityWindowHwnd = 0;
             _appliedParentHwnd = 0;
-            _appliedX = 0;
-            _appliedY = 0;
             _appliedWidth = 0;
             _appliedHeight = 0;
             _isAppliedVisible = false;
@@ -851,10 +822,8 @@ namespace CombatSimulation.Services.Unity
             }
         }
 
-        private static void GetEffectiveHostBounds(HostStateSnapshot snapshot, out int x, out int y, out int width, out int height)
+        private static void GetEffectiveHostSize(HostStateSnapshot snapshot, out int width, out int height)
         {
-            x = snapshot.X;
-            y = snapshot.Y;
             width = snapshot.Width;
             height = snapshot.Height;
 
@@ -869,8 +838,6 @@ namespace CombatSimulation.Services.Unity
 
                 if (clientWidth > 2 && clientHeight > 2)
                 {
-                    x = 0;
-                    y = 0;
                     width = clientWidth;
                     height = clientHeight;
                 }
@@ -879,8 +846,6 @@ namespace CombatSimulation.Services.Unity
 
         private static void ShowWindowAt(
             nint unityHwnd,
-            int x,
-            int y,
             int width,
             int height,
             bool frameChanged)
@@ -898,7 +863,7 @@ namespace CombatSimulation.Services.Unity
 
             // 只在父窗口、尺寸或可见状态真实变化时执行一次定位。
             // 不再使用 MoveWindow(repaint=true) 和 UpdateWindow 同步逼迫 Unity 重绘。
-            if (!SetWindowPos(unityHwnd, HwndTop, x, y, effectiveWidth, effectiveHeight, flags))
+            if (!SetWindowPos(unityHwnd, HwndTop, 0, 0, effectiveWidth, effectiveHeight, flags))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "定位 Unity 窗口失败。");
             }
@@ -1072,14 +1037,11 @@ namespace CombatSimulation.Services.Unity
 
         private void Log(string message)
         {
-            LogReceived?.Invoke(this, message);
             Debug.WriteLine($"[UnityWindowHost] {message}");
         }
 
         private readonly record struct HostStateSnapshot(
             nint ParentHwnd,
-            int X,
-            int Y,
             int Width,
             int Height,
             bool HasHostBounds,

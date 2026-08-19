@@ -37,25 +37,17 @@ public sealed class UnityService : IAsyncDisposable
 
     public static UnityService Instance { get; } = new();
 
-    public UnityConnectionState State => _tcpClient.State;
     public bool IsConnected => _tcpClient.IsConnected;
-    public bool IsUnityProcessRunning => _processManager.IsRunning;
 
-    public event EventHandler<UnityConnectionState>? StateChanged;
     public event EventHandler<UnityMessage>? EventReceived;
-    public event EventHandler<string>? LogReceived;
 
     private UnityService()
     {
         _windowHost = new UnityWindowHost(_processManager.GetRunningProcess);
 
-        _tcpClient.StateChanged += (_, state) => StateChanged?.Invoke(this, state);
         // 当接收到信息时
         _tcpClient.MessageReceived += OnTcpMessageReceived;
         _tcpClient.ConnectionLost += OnTcpConnectionLost;
-        _tcpClient.LogReceived += (_, message) => Log(message);
-        _processManager.LogReceived += (_, message) => Log(message);
-        _windowHost.LogReceived += (_, message) => Log(message);
     }
 
     /// <summary>
@@ -232,10 +224,10 @@ public sealed class UnityService : IAsyncDisposable
     /// 更新 Unity 窗口的宿主区域。
     /// </summary>
     /// <remarks>
-    /// 坐标必须是相对于 WPF 主窗口客户区左上角的物理像素坐标。
-    /// 该方法只缓存位置和大小；是否显示由 <see cref="ShowUnityWindowAsync(CancellationToken)"/> 控制。
+    /// Unity 窗口始终以 (0,0) 填满原生宿主客户区；该方法只缓存宿主和大小。
+    /// 是否显示由 <see cref="ShowUnityWindowAsync(CancellationToken)"/> 控制。
     /// </remarks>
-    public void SetUnityWindowHostBounds(nint parentHwnd, int x, int y, int width, int height)
+    public void SetUnityWindowHostBounds(nint parentHwnd, int width, int height)
     {
         if (parentHwnd == 0 || width <= 0 || height <= 0)
         {
@@ -243,7 +235,7 @@ public sealed class UnityService : IAsyncDisposable
         }
 
         RegisterPreferredHost(parentHwnd);
-        _windowHost.SetHostBounds(parentHwnd, x, y, width, height);
+        _windowHost.SetHostBounds(parentHwnd, width, height);
     }
 
     /// <summary>
@@ -255,25 +247,6 @@ public sealed class UnityService : IAsyncDisposable
 
         _processManager.StartIfNeeded(GetPreferredStartupParent());
         await _windowHost.ShowAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// 更新 Unity 窗口宿主区域，并立即按该区域显示 Unity 窗口。
-    /// </summary>
-    /// <remarks>
-    /// 保留该重载是为了兼容旧调用。新代码应优先调用
-    /// <see cref="SetUnityWindowHostBounds"/> 后再调用 <see cref="ShowUnityWindowAsync(CancellationToken)"/>。
-    /// </remarks>
-    public async Task ShowUnityWindowAsync(
-        nint parentHwnd,
-        int x,
-        int y,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-    {
-        SetUnityWindowHostBounds(parentHwnd, x, y, width, height);
-        await ShowUnityWindowAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -542,7 +515,6 @@ public sealed class UnityService : IAsyncDisposable
 
     private void Log(string message)
     {
-        LogReceived?.Invoke(this, message);
         Debug.WriteLine($"[UnityService] {message}");
     }
 

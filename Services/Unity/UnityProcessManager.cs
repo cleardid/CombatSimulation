@@ -56,11 +56,6 @@ internal sealed class UnityProcessManager
     }
 
     /// <summary>
-    /// 进程管理日志事件。
-    /// </summary>
-    public event EventHandler<string>? LogReceived;
-
-    /// <summary>
     /// 在 Unity 尚未运行时启动 Unity；如果已经运行，则直接返回现有进程。
     /// </summary>
     /// <returns>当前可用的 Unity 进程。</returns>
@@ -182,11 +177,10 @@ internal sealed class UnityProcessManager
     }
 
     /// <summary>
-    /// 分发进程管理日志，并同步写入调试输出窗口。
+    /// 写入进程管理调试日志。
     /// </summary>
     private void Log(string message)
     {
-        LogReceived?.Invoke(this, message);
         Debug.WriteLine($"[UnityProcessManager] {message}");
     }
 }

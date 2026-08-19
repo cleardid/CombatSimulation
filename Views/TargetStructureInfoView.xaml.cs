@@ -19,10 +19,8 @@ namespace CombatSimulation.Views;
 public partial class TargetStructureInfoView : UserControl
 {
     private const int MaxHostBoundsRetryCount = 80;
-    private const int StabilizationTickLimit = 30;
 
     private static readonly TimeSpan HostBoundsRetryInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan StabilizationInterval = TimeSpan.FromMilliseconds(100);
 
     private bool _hostBoundsUpdatePending;
     private bool _showAfterHostBoundsUpdate;
@@ -30,13 +28,8 @@ public partial class TargetStructureInfoView : UserControl
     private bool _showRequestedForCurrentActivation;
     private bool _unityWindowActive;
     private int _hostBoundsRetryCount;
-    private int _stabilizationTickCount;
     private long _activationVersion;
-    private nint _lastHostHwnd;
-    private int _lastHostWidth;
-    private int _lastHostHeight;
     private CancellationTokenSource? _visibleCts;
-    private DispatcherTimer? _stabilizationTimer;
     private DispatcherOperation? _queuedShowOperation;
 
     public TargetStructureInfoView()
@@ -59,7 +52,6 @@ public partial class TargetStructureInfoView : UserControl
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         DeactivateUnityWindow();
-        StopHostBoundsStabilization();
     }
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -74,16 +66,9 @@ public partial class TargetStructureInfoView : UserControl
         }
     }
 
-    private void OnUnityHostSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        MarkHostBoundsDirtyAndUpdate(showAfterUpdate: IsVisible);
-        StartHostBoundsStabilization();
-    }
-
     private void OnUnityNativeHostChanged(object sender, EventArgs e)
     {
         MarkHostBoundsDirtyAndUpdate(showAfterUpdate: IsVisible);
-        StartHostBoundsStabilization();
     }
 
     private void OnUnityNativeHostDestroying(object sender, EventArgs e)
@@ -114,7 +99,6 @@ public partial class TargetStructureInfoView : UserControl
     private void OnUnityNativeHostBoundsChanged(object sender, EventArgs e)
     {
         MarkHostBoundsDirtyAndUpdate(showAfterUpdate: IsVisible);
-        StartHostBoundsStabilization();
     }
 
     private void OnStructureTreeSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -151,9 +135,9 @@ public partial class TargetStructureInfoView : UserControl
         AbortQueuedShowOperation();
         EnsureVisibleToken();
         _showRequestedForCurrentActivation = false;
+        _hostBoundsRetryCount = 0;
 
         RequestUnityHostBoundsUpdate(showAfterUpdate: true);
-        StartHostBoundsStabilization();
     }
 
     private void DeactivateUnityWindow()
@@ -168,7 +152,6 @@ public partial class TargetStructureInfoView : UserControl
         AbortQueuedShowOperation();
         _showAfterHostBoundsUpdate = false;
         _showRequestedForCurrentActivation = false;
-        StopHostBoundsStabilization();
         CancelVisibleToken();
         UnityService.Instance.HideUnityWindow();
     }
@@ -238,62 +221,6 @@ public partial class TargetStructureInfoView : UserControl
             {
                 RequestUnityHostBoundsUpdate(showAfterUpdate: false);
             }
-        }
-    }
-
-    private void StartHostBoundsStabilization()
-    {
-        if (!IsLoaded || !IsVisible)
-        {
-            return;
-        }
-
-        _stabilizationTickCount = 0;
-
-        if (_stabilizationTimer == null)
-        {
-            _stabilizationTimer = new DispatcherTimer(DispatcherPriority.ContextIdle, Dispatcher)
-            {
-                Interval = StabilizationInterval
-            };
-            _stabilizationTimer.Tick += OnHostBoundsStabilizationTick;
-        }
-
-        if (!_stabilizationTimer.IsEnabled)
-        {
-            _stabilizationTimer.Start();
-        }
-    }
-
-    private void StopHostBoundsStabilization()
-    {
-        if (_stabilizationTimer == null)
-        {
-            return;
-        }
-
-        _stabilizationTimer.Stop();
-        _stabilizationTickCount = 0;
-    }
-
-    private void OnHostBoundsStabilizationTick(object? sender, EventArgs e)
-    {
-        if (!IsLoaded || !IsVisible)
-        {
-            StopHostBoundsStabilization();
-            return;
-        }
-
-        _stabilizationTickCount++;
-
-        if (UpdateUnityHostBounds() && !_showRequestedForCurrentActivation)
-        {
-            QueueShowUnityWindow();
-        }
-
-        if (_stabilizationTickCount >= StabilizationTickLimit)
-        {
-            StopHostBoundsStabilization();
         }
     }
 
@@ -416,17 +343,7 @@ public partial class TargetStructureInfoView : UserControl
             return false;
         }
 
-        if (_hostBoundsReady && _lastHostHwnd == hostHwnd && _lastHostWidth == width && _lastHostHeight == height)
-        {
-            return true;
-        }
-
-        // Unity 已经被挂到 UnityNativeHost 的原生 HWND 下，因此坐标固定为宿主客户区左上角。
-        UnityService.Instance.SetUnityWindowHostBounds(hostHwnd, 0, 0, width, height);
-
-        _lastHostHwnd = hostHwnd;
-        _lastHostWidth = width;
-        _lastHostHeight = height;
+        UnityService.Instance.SetUnityWindowHostBounds(hostHwnd, width, height);
         _hostBoundsReady = true;
 
         return true;
