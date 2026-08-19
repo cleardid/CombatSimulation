@@ -243,7 +243,7 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 修改单个部件。顺序为：Unity 确认成功、写数据库、刷新本地模型和界面。
+    /// 修改单个部件。MySQL 是唯一事实来源，提交成功后再刷新本地模型并同步 Unity 快照。
     /// </summary>
     public async Task<bool> UpdatePartAsync(TargetStructureTreeNode node, TargetPartInfoItem editedPart)
     {
@@ -270,12 +270,8 @@ public sealed partial class TargetInfoViewModel
         {
             string oldPartCode = part.PartCode;
 
-            // 部件编辑必须先同步 Unity，Unity 成功后再写数据库和刷新本地模型。
-            // Unity 端需要使用数据库结构作为 data，因此这里先把 WPF 模型转换为 Target_Part_Info_By_MySQL。
-            Target_Part_Info_By_MySQL unityPartData = _targetInfoRepository.CreatePartCommandData(editedPart);
-            await _unityCommandService.UpdateTargetPartAsync(unityPartData).ConfigureAwait(true);
-
-            // Unity 已确认修改成功后，才允许持久化数据库，避免 Unity 和 MySQL 状态不一致。
+            // 先提交数据库。若写入失败，Unity 和本地绑定对象均保持原状态；
+            // 若后续 Unity 暂时不可用，则以数据库快照在重连后恢复一致。
             string targetCode = SelectedTarget.Code;
             await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdatePart(targetCode, oldPartCode, editedPart));
 
