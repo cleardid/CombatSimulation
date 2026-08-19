@@ -109,6 +109,39 @@ public sealed class MySqlCommand_TJ : MySqlConnect
         return Convert.ToInt32(_sqlComm.ExecuteScalar()) != 0;
     }
     /// <summary>
+    /// 执行迁移器使用的固定 SQL，并绑定参数。
+    /// </summary>
+    internal int ExecuteNonQuery(string commandText, params (string Name, object? Value)[] parameters)
+    {
+        PrepareRawCommand(commandText, parameters);
+        return _sqlComm!.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// 执行迁移器使用的固定标量查询，并绑定参数。
+    /// </summary>
+    internal object? ExecuteScalar(string commandText, params (string Name, object? Value)[] parameters)
+    {
+        PrepareRawCommand(commandText, parameters);
+        return _sqlComm!.ExecuteScalar();
+    }
+
+    private void PrepareRawCommand(string commandText, IEnumerable<(string Name, object? Value)> parameters)
+    {
+        if (string.IsNullOrWhiteSpace(commandText))
+        {
+            throw new ArgumentException("SQL 命令不能为空。", nameof(commandText));
+        }
+
+        EnsureCommandReady();
+        _sqlComm!.CommandText = commandText;
+        _sqlComm.Parameters.Clear();
+        foreach ((string name, object? value) in parameters)
+        {
+            _sqlComm.Parameters.AddWithValue(name, NormalizeParameterValue(value));
+        }
+    }
+    /// <summary>
     /// 在当前连接上执行一个原子业务操作。发生异常时回滚全部数据库修改。
     /// </summary>
     public void ExecuteInTransaction(Action operation)

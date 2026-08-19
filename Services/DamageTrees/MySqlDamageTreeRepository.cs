@@ -231,7 +231,7 @@ public sealed class MySqlDamageTreeRepository
         {
             MySQLConnectionInfo.EnsureDatabaseExists(_connectionString);
             using LoadAndWriteDb bootstrapDb = new(_connectionString);
-            EnsureTables(bootstrapDb);
+            DatabaseSchemaMigrator.Apply(bootstrapDb);
             _databaseAndTableChecked = true;
         }
 

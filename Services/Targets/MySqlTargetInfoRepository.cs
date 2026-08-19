@@ -396,7 +396,7 @@ public sealed class MySqlTargetInfoRepository
         {
             MySQLConnectionInfo.EnsureDatabaseExists(_connectionString);
             using LoadAndWriteDb bootstrapDb = new(_connectionString);
-            EnsureTables(bootstrapDb);
+            DatabaseSchemaMigrator.Apply(bootstrapDb);
             _databaseAndTableChecked = true;
         }
 
