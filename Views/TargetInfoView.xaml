@@ -50,7 +50,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid>
+    <Grid IsEnabled="{Binding IsDatabaseReady}">
         <!--定义两列 第一列为目标总览信息，第二列为具体信息-->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="300" />

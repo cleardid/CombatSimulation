@@ -36,25 +36,37 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 从数据库读取当前目标下的毁伤树。
+    /// 在后台线程读取当前目标下的毁伤树；快速切换目标时只应用最后一次结果。
     /// </summary>
-    private void LoadDamageTreesForSelectedTarget()
+    private async void LoadDamageTreesForSelectedTarget()
     {
-        DamageTrees.Clear();
-        SelectedDamageTree = null;
-        SelectedDamageTreeNode = null;
-        SelectedDamageNodeDetailRows.Clear();
-
-        if (SelectedTarget == null)
+        TargetInfoItem? target = SelectedTarget;
+        if (target == null)
         {
             StatusText = "请先选择目标，再查看毁伤树信息";
             return;
         }
 
+        _damageTreeLoadCts?.Cancel();
+        CancellationTokenSource loadCts = new();
+        _damageTreeLoadCts = loadCts;
+
+        DamageTrees.Clear();
+        SelectedDamageTree = null;
+        SelectedDamageTreeNode = null;
+        SelectedDamageNodeDetailRows.Clear();
+
+        StatusText = $"正在读取目标“{target.Name}”的毁伤树...";
+
         try
         {
-            IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = BuildPartLookup(SelectedTarget);
-            IReadOnlyList<DamageTreeInfoItem> storedTrees = _damageTreeRepository.LoadDamageTrees(SelectedTarget.Code, partLookup);
+            IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = BuildPartLookup(target);
+            IReadOnlyList<DamageTreeInfoItem> storedTrees = await RunRepositoryOperationAsync(
+                () => _damageTreeRepository.LoadDamageTrees(target.Code, partLookup));
+            if (loadCts.IsCancellationRequested || !ReferenceEquals(SelectedTarget, target))
+            {
+                return;
+            }
 
             // 当前界面只展示轻度、中度、重度三棵功能毁伤树。
             // 如果数据库中存在历史重复项，只保留同一毁伤等级的第一棵，避免下拉框出现多个“轻度毁伤树”。
@@ -76,16 +88,29 @@ public sealed partial class TargetInfoViewModel
 
             SelectedDamageTree = DamageTrees.FirstOrDefault();
             StatusText = DamageTrees.Count == 0
-                ? $"目标“{SelectedTarget.Name}”暂无毁伤树"
+                ? $"目标“{target.Name}”暂无毁伤树"
                 : skippedTreeCount == 0
-                    ? $"已读取目标“{SelectedTarget.Name}”的 {DamageTrees.Count} 棵毁伤树"
-                    : $"已读取目标“{SelectedTarget.Name}”的 {DamageTrees.Count} 棵毁伤树，已忽略 {skippedTreeCount} 棵非轻中重或重复毁伤树";
+                    ? $"已读取目标“{target.Name}”的 {DamageTrees.Count} 棵毁伤树"
+                    : $"已读取目标“{target.Name}”的 {DamageTrees.Count} 棵毁伤树，已忽略 {skippedTreeCount} 棵非轻中重或重复毁伤树";
         }
         catch (Exception ex)
         {
+            if (loadCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             StatusText = $"读取毁伤树失败：{ex.Message}";
             MySqlLog.LogWarning($"读取毁伤树失败：{ex}");
             Debug.WriteLine($"[TargetInfoViewModel] 读取毁伤树失败：{ex}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_damageTreeLoadCts, loadCts))
+            {
+                _damageTreeLoadCts = null;
+            }
+            loadCts.Dispose();
         }
     }
 

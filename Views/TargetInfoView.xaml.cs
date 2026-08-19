@@ -17,13 +17,26 @@ public partial class TargetInfoView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        Loaded += OnLoaded;
         AttachViewModel(DataContext as TargetInfoViewModel);
     }
 
-    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is TargetInfoViewModel viewModel)
+        {
+            await viewModel.InitializeAsync();
+        }
+    }
+
+    private async void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         DetachViewModel(_attachedViewModel);
         AttachViewModel(e.NewValue as TargetInfoViewModel);
+        if (IsLoaded && e.NewValue is TargetInfoViewModel viewModel)
+        {
+            await viewModel.InitializeAsync();
+        }
     }
 
     private void AttachViewModel(TargetInfoViewModel? viewModel)

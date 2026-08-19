@@ -21,20 +21,29 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 从 MySQL 仓储读取目标、系统和部件数据。
+    /// 在后台线程从 MySQL 仓储读取目标、系统和部件数据，再回到 UI 线程更新集合。
     /// </summary>
-    private void LoadTargetsFromRepository()
+    private async Task LoadTargetsFromRepositoryAsync()
     {
-        Targets.Clear();
-
+        StatusText = "正在读取目标数据库...";
         try
         {
-            IReadOnlyList<TargetInfoItem> storedTargets = _targetInfoRepository.LoadTargets();
+            IReadOnlyList<TargetInfoItem> storedTargets =
+                await RunRepositoryOperationAsync(_targetInfoRepository.LoadTargets);
+
+            Targets.Clear();
             foreach (TargetInfoItem target in storedTargets)
             {
                 // 数据库读取出来的是模型树，界面还需要对应的 TargetStructureTreeNode 树节点。
                 EnsureTargetStructureTree(target);
                 Targets.Add(target);
+            }
+
+            RebuildTargetCategories();
+            SelectedTarget = FilteredTargets.Cast<TargetInfoItem>().FirstOrDefault();
+            if (SelectedTarget == null)
+            {
+                RefreshSelectedDetailRows(null);
             }
 
             _targetLoadStatusText = Targets.Count == 0
@@ -49,6 +58,10 @@ public sealed partial class TargetInfoViewModel
             StatusText = _targetLoadStatusText;
             MySqlLog.LogWarning($"读取目标数据库失败：{ex}");
             Debug.WriteLine($"[TargetInfoViewModel] 读取目标数据库失败：{ex}");
+        }
+        finally
+        {
+            IsDatabaseReady = true;
         }
     }
 

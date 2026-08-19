@@ -31,8 +31,11 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     private CancellationTokenSource? _partHighlightCts;
     private CancellationTokenSource? _checkedPartSyncCts;
     private CancellationTokenSource? _databaseSnapshotSyncCts;
+    private CancellationTokenSource? _damageTreeLoadCts;
     private readonly SemaphoreSlim _repositoryOperationLock = new(1, 1);
+    private readonly object _initializationSync = new();
     private string? _targetLoadStatusText;
+    private Task? _initializationTask;
 
     /// <summary>
     /// 默认构造函数。
@@ -65,32 +68,27 @@ public sealed partial class TargetInfoViewModel : ObservableObject
         _damageTreeRepository = damageTreeRepository;
         _unityCommandService = unityCommandService;
 
-        // 先订阅 Unity 事件。SelectedTarget 在构造末尾会触发 show_target，
-        // 若此时 Unity 刚建立连接并立即上报 server_ready，WPF 不能错过该事件。
+        // 先订阅 Unity 事件，避免初始化数据库期间错过 Unity 的 server_ready 通知。
         _unityCommandService.EventReceived += OnUnityEventReceived;
-
-        // 先从数据库加载目标，再建立 ICollectionView。否则筛选视图会拿到空集合的初始状态。
-        LoadTargetsFromRepository();
 
         // 使用 WPF 集合视图筛选目标，不重建原始目标集合，避免选中项和树节点引用失效。
         FilteredTargets = CollectionViewSource.GetDefaultView(Targets);
         FilteredTargets.Filter = FilterTargetByCategory;
 
-        // 目标类型依赖数据库结果，加载完成后统一重建下拉列表。
+        // 构造函数只建立界面状态，不访问数据库；视图 Loaded 后显式异步初始化。
         RebuildTargetCategories(refreshFilteredTargets: false);
-
-        // 默认选择数据库读取到的第一个目标。SelectedTarget 的 partial 回调会同步 Unity 显示命令。
-        SelectedTarget = FilteredTargets.Cast<TargetInfoItem>().FirstOrDefault();
-        if (SelectedTarget == null)
-        {
-            RefreshSelectedDetailRows(null);
-        }
-
-        // 默认进入目标结构信息模块。
+        RefreshSelectedDetailRows(null);
         SelectedInfoPanel = StructureInfoPanel;
-        if (!string.IsNullOrWhiteSpace(_targetLoadStatusText) && (SelectedTarget == null || Targets.Count == 0))
+    }
+
+    /// <summary>
+    /// 在界面加载后异步读取数据库。重复调用会复用同一个初始化任务。
+    /// </summary>
+    public Task InitializeAsync()
+    {
+        lock (_initializationSync)
         {
-            StatusText = _targetLoadStatusText;
+            return _initializationTask ??= LoadTargetsFromRepositoryAsync();
         }
     }
 
@@ -207,6 +205,12 @@ public sealed partial class TargetInfoViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _selectedTargetCategory = AllTargetCategory;
+    /// <summary>
+    /// 首次数据库读取结束后允许界面执行增删改操作。
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDatabaseReady;
+
 
     /// <summary>
     /// 选中的目标。
