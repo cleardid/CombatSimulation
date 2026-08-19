@@ -69,6 +69,22 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
+    /// 在后台线程串行执行需要返回业务结果的数据库操作。
+    /// </summary>
+    private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<TResult> operation)
+    {
+        await _repositoryOperationLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(operation).ConfigureAwait(false);
+        }
+        finally
+        {
+            _repositoryOperationLock.Release();
+        }
+    }
+
+    /// <summary>
     /// 判断当前选中目标是否仍在当前筛选结果中。
     /// </summary>
     private bool IsSelectedTargetInCurrentFilter()

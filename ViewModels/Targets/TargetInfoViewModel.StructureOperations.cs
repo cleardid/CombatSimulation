@@ -363,7 +363,13 @@ public sealed partial class TargetInfoViewModel
 
                 string targetCode = SelectedTarget.Code;
                 string partCode = node.Part.PartCode;
-                await RunRepositoryOperationAsync(() => _targetInfoRepository.DeletePart(targetCode, partCode));
+                string? deletionBlockReason = await RunRepositoryOperationAsync(
+                    () => _targetInfoRepository.DeletePart(targetCode, partCode));
+                if (deletionBlockReason != null)
+                {
+                    StatusText = deletionBlockReason;
+                    return false;
+                }
 
                 // 数据库删除成功后再解绑勾选事件，防止节点移除过程中触发无效 Unity 同步。
                 DetachCheckStateHandler(node);
@@ -387,7 +393,13 @@ public sealed partial class TargetInfoViewModel
                 // 删除系统会连带删除其子系统和部件。仓储层负责数据库级联，本地树负责移除根节点即可。
                 string targetCode = SelectedTarget.Code;
                 string systemCode = node.System.SystemCode;
-                await RunRepositoryOperationAsync(() => _targetInfoRepository.DeleteSystem(targetCode, systemCode));
+                string? deletionBlockReason = await RunRepositoryOperationAsync(
+                    () => _targetInfoRepository.DeleteSystem(targetCode, systemCode));
+                if (deletionBlockReason != null)
+                {
+                    StatusText = deletionBlockReason;
+                    return false;
+                }
 
                 DetachCheckStateHandler(node);
 

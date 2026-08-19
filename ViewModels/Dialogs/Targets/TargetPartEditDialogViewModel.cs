@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 /// <summary>
@@ -154,7 +155,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
 
         if (string.IsNullOrWhiteSpace(partName))
         {
-            ValidationMessage = "请输入等效部件名称。";
+            ShowValidationMessage("请输入等效部件名称。");
             return;
         }
 
@@ -367,6 +368,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
         }
 
         ValidationMessage = $"{fieldName} 必须是有效数字。";
+        MessageBox.Show(ValidationMessage, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
     }
 
@@ -424,6 +426,12 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
         }
 
         public string Value { get; }
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
 

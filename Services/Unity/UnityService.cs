@@ -16,6 +16,7 @@ public sealed class UnityService : IAsyncDisposable
     private static readonly TimeSpan StartupRetryInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan StartupHostWaitTimeout = TimeSpan.FromSeconds(3);
 
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
     private readonly SemaphoreSlim _reconnectLock = new(1, 1);
@@ -24,31 +25,29 @@ public sealed class UnityService : IAsyncDisposable
     private readonly UnityTcpClient _tcpClient = new();
     private readonly UnityProcessManager _processManager = new();
     private readonly UnityWindowHost _windowHost;
+    private readonly object _startupParentLock = new();
+
+    private TaskCompletionSource<nint> _startupHostAvailable = CreateStartupHostCompletion();
+    private nint _defaultParentHwnd;
+    private nint _preferredHostHwnd;
+
 
     private bool _disposed;
     private bool _stopping;
 
     public static UnityService Instance { get; } = new();
 
-    public UnityConnectionState State => _tcpClient.State;
     public bool IsConnected => _tcpClient.IsConnected;
-    public bool IsUnityProcessRunning => _processManager.IsRunning;
 
-    public event EventHandler<UnityConnectionState>? StateChanged;
     public event EventHandler<UnityMessage>? EventReceived;
-    public event EventHandler<string>? LogReceived;
 
     private UnityService()
     {
         _windowHost = new UnityWindowHost(_processManager.GetRunningProcess);
 
-        _tcpClient.StateChanged += (_, state) => StateChanged?.Invoke(this, state);
         // 当接收到信息时
         _tcpClient.MessageReceived += OnTcpMessageReceived;
         _tcpClient.ConnectionLost += OnTcpConnectionLost;
-        _tcpClient.LogReceived += (_, message) => Log(message);
-        _processManager.LogReceived += (_, message) => Log(message);
-        _windowHost.LogReceived += (_, message) => Log(message);
     }
 
     /// <summary>
@@ -72,7 +71,7 @@ public sealed class UnityService : IAsyncDisposable
                 return;
             }
 
-            StartProcessAndPrepareWindow();
+            await StartProcessAndPrepareWindowAsync(effectiveToken).ConfigureAwait(false);
             await ConnectWithRetryAsync(StartupConnectTimeout, effectiveToken).ConfigureAwait(false);
         }
         finally
@@ -208,6 +207,11 @@ public sealed class UnityService : IAsyncDisposable
     /// </summary>
     public void SetDefaultParentWindow(nint parentHwnd)
     {
+        lock (_startupParentLock)
+        {
+            _defaultParentHwnd = parentHwnd;
+        }
+
         _windowHost.SetDefaultParentWindow(parentHwnd);
 
         if (parentHwnd != 0 && _processManager.IsRunning && !_shutdownCts.IsCancellationRequested)
@@ -220,17 +224,18 @@ public sealed class UnityService : IAsyncDisposable
     /// 更新 Unity 窗口的宿主区域。
     /// </summary>
     /// <remarks>
-    /// 坐标必须是相对于 WPF 主窗口客户区左上角的物理像素坐标。
-    /// 该方法只缓存位置和大小；是否显示由 <see cref="ShowUnityWindowAsync(CancellationToken)"/> 控制。
+    /// Unity 窗口始终以 (0,0) 填满原生宿主客户区；该方法只缓存宿主和大小。
+    /// 是否显示由 <see cref="ShowUnityWindowAsync(CancellationToken)"/> 控制。
     /// </remarks>
-    public void SetUnityWindowHostBounds(nint parentHwnd, int x, int y, int width, int height)
+    public void SetUnityWindowHostBounds(nint parentHwnd, int width, int height)
     {
         if (parentHwnd == 0 || width <= 0 || height <= 0)
         {
             return;
         }
 
-        _windowHost.SetHostBounds(parentHwnd, x, y, width, height);
+        RegisterPreferredHost(parentHwnd);
+        _windowHost.SetHostBounds(parentHwnd, width, height);
     }
 
     /// <summary>
@@ -240,27 +245,8 @@ public sealed class UnityService : IAsyncDisposable
     {
         ThrowIfDisposed();
 
-        _processManager.StartIfNeeded();
+        _processManager.StartIfNeeded(GetPreferredStartupParent());
         await _windowHost.ShowAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// 更新 Unity 窗口宿主区域，并立即按该区域显示 Unity 窗口。
-    /// </summary>
-    /// <remarks>
-    /// 保留该重载是为了兼容旧调用。新代码应优先调用
-    /// <see cref="SetUnityWindowHostBounds"/> 后再调用 <see cref="ShowUnityWindowAsync(CancellationToken)"/>。
-    /// </remarks>
-    public async Task ShowUnityWindowAsync(
-        nint parentHwnd,
-        int x,
-        int y,
-        int width,
-        int height,
-        CancellationToken cancellationToken = default)
-    {
-        SetUnityWindowHostBounds(parentHwnd, x, y, width, height);
-        await ShowUnityWindowAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -269,6 +255,16 @@ public sealed class UnityService : IAsyncDisposable
     public void HideUnityWindow()
     {
         _windowHost.Hide();
+    }
+
+    /// <summary>
+    /// 原生宿主 HWND 即将销毁时，将 Unity 窗口安全地脱离该宿主。
+    /// 普通页面 Visibility 切换只应调用 <see cref="HideUnityWindow"/>。
+    /// </summary>
+    public void DetachUnityWindowFromHost(nint hostHwnd)
+    {
+        _windowHost.DetachFromHost(hostHwnd);
+        UnregisterPreferredHost(hostHwnd);
     }
 
     private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
@@ -281,13 +277,99 @@ public sealed class UnityService : IAsyncDisposable
         await StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private void StartProcessAndPrepareWindow()
+    private async Task StartProcessAndPrepareWindowAsync(CancellationToken cancellationToken)
     {
-        _processManager.StartIfNeeded();
+        nint startupParent = await WaitForStartupParentAsync(cancellationToken).ConfigureAwait(false);
+        _processManager.StartIfNeeded(startupParent);
         if (!_shutdownCts.IsCancellationRequested)
         {
             _ = _windowHost.PrepareHiddenAsync(_shutdownCts.Token);
         }
+    }
+
+    // Prefer the real HwndHost used by the target-structure view. If that view is not
+    // created, fall back to the main WPF window after a short bounded wait.
+    private async Task<nint> WaitForStartupParentAsync(CancellationToken cancellationToken)
+    {
+        Task<nint> hostTask;
+        nint fallbackParent;
+
+        lock (_startupParentLock)
+        {
+            if (_preferredHostHwnd != 0)
+            {
+                return _preferredHostHwnd;
+            }
+
+            hostTask = _startupHostAvailable.Task;
+            fallbackParent = _defaultParentHwnd;
+        }
+
+        try
+        {
+            return await hostTask.WaitAsync(StartupHostWaitTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            lock (_startupParentLock)
+            {
+                if (_preferredHostHwnd != 0)
+                {
+                    return _preferredHostHwnd;
+                }
+
+                return _defaultParentHwnd != 0 ? _defaultParentHwnd : fallbackParent;
+            }
+        }
+    }
+
+    private void RegisterPreferredHost(nint hostHwnd)
+    {
+        if (hostHwnd == 0)
+        {
+            return;
+        }
+
+        TaskCompletionSource<nint> completion;
+        lock (_startupParentLock)
+        {
+            _preferredHostHwnd = hostHwnd;
+            completion = _startupHostAvailable;
+        }
+
+        completion.TrySetResult(hostHwnd);
+    }
+
+    private void UnregisterPreferredHost(nint hostHwnd)
+    {
+        if (hostHwnd == 0)
+        {
+            return;
+        }
+
+        lock (_startupParentLock)
+        {
+            if (_preferredHostHwnd != hostHwnd)
+            {
+                return;
+            }
+
+            _preferredHostHwnd = 0;
+            _startupHostAvailable = CreateStartupHostCompletion();
+        }
+    }
+
+    private nint GetPreferredStartupParent()
+    {
+        lock (_startupParentLock)
+        {
+            return _preferredHostHwnd != 0 ? _preferredHostHwnd : _defaultParentHwnd;
+        }
+    }
+
+    private static TaskCompletionSource<nint> CreateStartupHostCompletion()
+    {
+        return new TaskCompletionSource<nint>(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async Task ConnectWithRetryAsync(TimeSpan timeout, CancellationToken cancellationToken)
@@ -391,7 +473,7 @@ public sealed class UnityService : IAsyncDisposable
                             return;
                         }
 
-                        StartProcessAndPrepareWindow();
+                        await StartProcessAndPrepareWindowAsync(_shutdownCts.Token).ConfigureAwait(false);
                         await _tcpClient.ConnectAsync(_shutdownCts.Token).ConfigureAwait(false);
                         return;
                     }
@@ -433,7 +515,6 @@ public sealed class UnityService : IAsyncDisposable
 
     private void Log(string message)
     {
-        LogReceived?.Invoke(this, message);
         Debug.WriteLine($"[UnityService] {message}");
     }
 

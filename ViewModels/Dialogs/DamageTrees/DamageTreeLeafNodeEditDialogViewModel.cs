@@ -1,7 +1,8 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -100,13 +101,13 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
         string nodeName = NodeName.Trim();
         if (string.IsNullOrWhiteSpace(nodeName))
         {
-            ValidationMessage = "请输入节点名称。";
+            ShowValidationMessage("请输入节点名称。");
             return;
         }
 
         if (SelectedStructureNode?.Part == null)
         {
-            ValidationMessage = "请选择目标结构树中的底层部件，不能选择目标、系统或子系统。";
+            ShowValidationMessage("请选择目标结构树中的底层部件，不能选择目标、系统或子系统。");
             return;
         }
 
@@ -152,5 +153,11 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
         }
 
         return null;
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

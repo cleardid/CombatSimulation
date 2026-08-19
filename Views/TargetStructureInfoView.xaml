@@ -437,8 +437,7 @@
                     Background="#000000"
                     BorderBrush="#223B4A5F"
                     BorderThickness="1,1,1,0"
-                    ClipToBounds="True"
-                    SizeChanged="OnUnityHostSizeChanged">
+                    ClipToBounds="True">
 
                 <!--
                     UnityHostControl 会创建一个真正的 Win32 子窗口。
@@ -449,6 +448,7 @@
                                                 VerticalAlignment="Stretch"
                                                 Focusable="False"
                                                 NativeHostChanged="OnUnityNativeHostChanged"
+                                                NativeHostDestroying="OnUnityNativeHostDestroying"
                                                 NativeHostBoundsChanged="OnUnityNativeHostBoundsChanged" />
             </Border>
 

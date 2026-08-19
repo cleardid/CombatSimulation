@@ -252,18 +252,14 @@
 
             <StackPanel Grid.Row="2"
                         HorizontalAlignment="Center"
+                        Orientation="Horizontal"
                         Margin="0,8,0,8">
-                <TextBlock Text="{Binding ValidationMessage}" Style="{StaticResource DialogValidationTextStyle}" />
-
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Center">
-                    <Button Content="保存并退出"
-                            Style="{StaticResource DialogButtonStyle}"
-                            Command="{Binding SaveCommand}" />
-                    <Button Content="取消"
-                            Style="{StaticResource DialogButtonStyle}"
-                            Command="{Binding CancelCommand}" />
-                </StackPanel>
+                <Button Content="保存并退出"
+                        Style="{StaticResource DialogButtonStyle}"
+                        Command="{Binding SaveCommand}" />
+                <Button Content="取消"
+                        Style="{StaticResource DialogButtonStyle}"
+                        Command="{Binding CancelCommand}" />
             </StackPanel>
         </Grid>
     </Border>

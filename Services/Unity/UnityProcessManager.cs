@@ -1,4 +1,5 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 
 namespace CombatSimulation.Services.Unity;
@@ -55,17 +56,12 @@ internal sealed class UnityProcessManager
     }
 
     /// <summary>
-    /// 进程管理日志事件。
-    /// </summary>
-    public event EventHandler<string>? LogReceived;
-
-    /// <summary>
     /// 在 Unity 尚未运行时启动 Unity；如果已经运行，则直接返回现有进程。
     /// </summary>
     /// <returns>当前可用的 Unity 进程。</returns>
     /// <exception cref="FileNotFoundException">未找到 Unity 可执行文件时抛出。</exception>
     /// <exception cref="InvalidOperationException">进程启动失败时抛出。</exception>
-    public Process StartIfNeeded()
+    public Process StartIfNeeded(nint parentHwnd = 0)
     {
         lock (_sync)
         {
@@ -90,9 +86,24 @@ internal sealed class UnityProcessManager
                 WorkingDirectory = unityDirectory,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                Arguments = "-screen-fullscreen 0 -popupwindow -logFile unity_player.log"
+                WindowStyle = ProcessWindowStyle.Hidden
             };
+            startInfo.ArgumentList.Add("-screen-fullscreen");
+            startInfo.ArgumentList.Add("0");
+
+            // Create the native host before launching Unity, following the UnityUIForWPF pattern.
+            // Starting with -parentHWND avoids converting a popup after graphics initialization.
+            // This reduces unnecessary swap-chain recreation during the first embed.
+            if (parentHwnd != 0)
+            {
+                startInfo.ArgumentList.Add("-parentHWND");
+                startInfo.ArgumentList.Add(parentHwnd.ToInt64().ToString(CultureInfo.InvariantCulture));
+                startInfo.ArgumentList.Add("delayed");
+            }
+
+            startInfo.ArgumentList.Add("-logFile");
+            startInfo.ArgumentList.Add("unity_player.log");
+
 
             _process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException("Unity 进程启动失败。Process.Start 返回 null。");
@@ -166,11 +177,10 @@ internal sealed class UnityProcessManager
     }
 
     /// <summary>
-    /// 分发进程管理日志，并同步写入调试输出窗口。
+    /// 写入进程管理调试日志。
     /// </summary>
     private void Log(string message)
     {
-        LogReceived?.Invoke(this, message);
         Debug.WriteLine($"[UnityProcessManager] {message}");
     }
 }

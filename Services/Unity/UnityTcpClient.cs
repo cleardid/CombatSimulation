@@ -74,22 +74,12 @@ internal sealed class UnityTcpClient
     private bool _closing;
 
     /// <summary>
-    /// 获取当前 TCP 连接状态。
-    /// </summary>
-    public UnityConnectionState State => _state;
-
-    /// <summary>
     /// 获取当前是否已经建立可用 TCP 连接。
     /// </summary>
     public bool IsConnected =>
         _state == UnityConnectionState.Connected &&
         _tcpClient is { Connected: true } &&
         _stream != null;
-
-    /// <summary>
-    /// 连接状态变化事件。
-    /// </summary>
-    public event EventHandler<UnityConnectionState>? StateChanged;
 
     /// <summary>
     /// 接收到完整 Unity 消息时触发。
@@ -100,11 +90,6 @@ internal sealed class UnityTcpClient
     /// TCP 连接异常断开时触发。
     /// </summary>
     public event EventHandler<Exception>? ConnectionLost;
-
-    /// <summary>
-    /// TCP 客户端日志事件。
-    /// </summary>
-    public event EventHandler<string>? LogReceived;
 
     /// <summary>
     /// 连接 Unity TCP Server，并启动后台接收循环。
@@ -406,7 +391,7 @@ internal sealed class UnityTcpClient
     }
 
     /// <summary>
-    /// 更新连接状态，并在状态确实变化时触发状态事件。
+    /// 更新连接状态。
     /// </summary>
     private void SetState(UnityConnectionState state)
     {
@@ -416,15 +401,13 @@ internal sealed class UnityTcpClient
         }
 
         _state = state;
-        StateChanged?.Invoke(this, state);
     }
 
     /// <summary>
-    /// 分发 TCP 客户端日志，并同步写入调试输出窗口。
+    /// 写入 TCP 客户端调试日志。
     /// </summary>
     private void Log(string message)
     {
-        LogReceived?.Invoke(this, message);
         Debug.WriteLine($"[UnityTcpClient] {message}");
     }
 }

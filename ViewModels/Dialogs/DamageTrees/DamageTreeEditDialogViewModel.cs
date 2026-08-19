@@ -1,6 +1,7 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -75,19 +76,19 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, ID
 
         if (string.IsNullOrWhiteSpace(treeName))
         {
-            ValidationMessage = "请输入毁伤树名称。";
+            ShowValidationMessage("请输入毁伤树名称。");
             return;
         }
 
         if (!DamageTreeDefaults.IsKnownDamageLevel(damageLevel))
         {
-            ValidationMessage = "毁伤等级只能选择轻度毁伤、中度毁伤或重度毁伤。";
+            ShowValidationMessage("毁伤等级只能选择轻度毁伤、中度毁伤或重度毁伤。");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(rootName))
         {
-            ValidationMessage = "请输入根节点名称。";
+            ShowValidationMessage("请输入根节点名称。");
             return;
         }
 
@@ -152,5 +153,11 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, ID
         }
 
         return tree.RootNodes[0];
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationMessage = message;
+        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }
