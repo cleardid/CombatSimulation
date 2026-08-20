@@ -19,7 +19,9 @@ internal static class Program
             ("毁伤等级历史文本可归一化", DamageLevelIsNormalized),
             ("毁伤树默认选择第一个空缺等级", FirstAvailableDamageLevelIsSelected),
             ("视图模型构造不访问数据库且释放事件", ViewModelConstructionAndDisposalAreSideEffectSafe),
-            ("Unity快照使用独立协议DTO", UnitySnapshotUsesIndependentProtocolDtos)
+            ("Unity快照使用独立协议DTO", UnitySnapshotUsesIndependentProtocolDtos),
+            ("删除异常由视图模型接收并保留界面数据", DeleteExceptionIsHandledByViewModel),
+            ("删除命令必须通过用户确认", DeleteCommandRequiresConfirmation)
         };
 
         int failedCount = 0;
@@ -106,11 +108,63 @@ internal static class Program
         AssertEqual("CombatSimulation.Models.Unity", snapshot.TargetParts[0].GetType().Namespace);
     }
 
+    private static void DeleteExceptionIsHandledByViewModel()
+    {
+        var targetRepository = new InMemoryTargetInfoRepository
+        {
+            DeleteTargetException = new InvalidOperationException("目标仍被毁伤树引用")
+        };
+        var viewModel = new TargetInfoViewModel(
+            targetRepository,
+            new InMemoryDamageTreeRepository(),
+            new RecordingUnityCommandService());
+        TargetInfoItem target = new() { Code = "target-1", Name = "测试目标", Category = "测试" };
+        viewModel.Targets.Add(target);
+
+        bool succeeded = viewModel.DeleteTargetAsync(target).GetAwaiter().GetResult();
+
+        AssertEqual(false, succeeded);
+        AssertEqual(true, viewModel.Targets.Contains(target));
+        AssertContains("目标仍被毁伤树引用", viewModel.StatusText);
+        viewModel.Dispose();
+    }
+
+    private static void DeleteCommandRequiresConfirmation()
+    {
+        var targetRepository = new InMemoryTargetInfoRepository();
+        var interactionService = new RecordingTargetInteractionService();
+        var viewModel = new TargetInfoViewModel(
+            targetRepository,
+            new InMemoryDamageTreeRepository(),
+            new RecordingUnityCommandService(),
+            interactionService);
+        TargetInfoItem target = new() { Code = "target-2", Name = "待确认目标", Category = "测试" };
+        viewModel.Targets.Add(target);
+        viewModel.SelectedTarget = target;
+
+        interactionService.ConfirmDeletionResult = false;
+        viewModel.RequestDeleteTargetCommand.ExecuteAsync(null).GetAwaiter().GetResult();
+        AssertEqual(0, targetRepository.DeleteTargetCount);
+        AssertEqual(true, viewModel.Targets.Contains(target));
+
+        interactionService.ConfirmDeletionResult = true;
+        viewModel.RequestDeleteTargetCommand.ExecuteAsync(null).GetAwaiter().GetResult();
+        AssertEqual(1, targetRepository.DeleteTargetCount);
+        AssertEqual(false, viewModel.Targets.Contains(target));
+        viewModel.Dispose();
+    }
     private static void AssertEqual<T>(T expected, T actual)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
         {
             throw new InvalidOperationException($"期望 {expected}，实际 {actual}。");
+        }
+    }
+    private static void AssertContains(string expectedSubstring, string actual)
+    {
+        if (!actual.Contains(expectedSubstring, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"期望文本包含“{expectedSubstring}”，实际为“{actual}”。");
         }
     }
 
@@ -129,7 +183,16 @@ internal static class Program
 
         public Task AddTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task DeleteTargetAsync(string targetCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public int DeleteTargetCount { get; private set; }
+        public Exception? DeleteTargetException { get; init; }
+
+        public Task DeleteTargetAsync(string targetCode, CancellationToken cancellationToken = default)
+        {
+            DeleteTargetCount++;
+            return DeleteTargetException == null
+                ? Task.CompletedTask
+                : Task.FromException(DeleteTargetException);
+        }
         public Task AddSystemAsync(string targetCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateSystemAsync(string targetCode, string originalSystemCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string?> DeleteSystemAsync(string targetCode, string systemCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -152,6 +215,22 @@ internal static class Program
         public Task AddNodeAsync(DamageTreeNodeItem node, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateNodeAsync(string originalNodeCode, DamageTreeNodeItem node, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteNodeAsync(string damageTreeCode, string nodeCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+    private sealed class RecordingTargetInteractionService : ITargetInteractionService
+    {
+        public bool ConfirmDeletionResult { get; set; }
+
+        public void ShowMessage(string message)
+        {
+        }
+
+        public bool ConfirmDeletion(string message) => ConfirmDeletionResult;
+        public TargetInfoItem? EditTarget(TargetInfoItem draft, bool isEditMode) => null;
+        public TargetSystemInfoItem? EditSystem(TargetSystemInfoItem draft, bool isEditMode, IEnumerable<TargetInfoItem> allTargets) => null;
+        public TargetPartInfoItem? EditPart(TargetPartInfoItem draft, bool isEditMode) => null;
+        public DamageTreeInfoItem? EditDamageTree(DamageTreeInfoItem draft, string targetName, bool isEditMode) => null;
+        public DamageTreeNodeItem? EditMiddleDamageNode(DamageTreeNodeItem draft, bool isEditMode) => null;
+        public DamageTreeNodeItem? EditLeafDamageNode(DamageTreeNodeItem draft, IEnumerable<TargetStructureTreeNode> structureRoots, bool isEditMode) => null;
     }
     private sealed class RecordingUnityCommandService : IUnityCommandService, IDisposable
     {
