@@ -29,7 +29,7 @@ public sealed partial class TargetInfoViewModel
         try
         {
             IReadOnlyList<TargetInfoItem> storedTargets =
-                await RunRepositoryOperationAsync(_targetInfoRepository.LoadTargets);
+                await RunRepositoryOperationAsync(() => _targetInfoRepository.LoadTargetsAsync());
 
             Targets.Clear();
             foreach (TargetInfoItem target in storedTargets)
@@ -66,14 +66,15 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 在后台线程串行执行数据库写操作，避免阻塞 WPF UI 线程并减少仓储实例并发访问。
+    /// 串行等待仓储操作，避免同一仓储实例被并发访问。
     /// </summary>
-    private async Task RunRepositoryOperationAsync(Action operation)
+    private async Task RunRepositoryOperationAsync(Func<Task> operation)
     {
+        ArgumentNullException.ThrowIfNull(operation);
         await _repositoryOperationLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            await Task.Run(operation).ConfigureAwait(false);
+            await operation().ConfigureAwait(false);
         }
         finally
         {
@@ -82,24 +83,34 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 在后台线程串行执行需要返回业务结果的数据库操作。
+    /// 串行等待需要返回业务结果的仓储操作。
     /// </summary>
-    private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<TResult> operation)
+    private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<Task<TResult>> operation)
     {
-        return await RunRepositoryOperationAsync(operation, CancellationToken.None).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(operation);
+        await _repositoryOperationLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await operation().ConfigureAwait(false);
+        }
+        finally
+        {
+            _repositoryOperationLock.Release();
+        }
     }
 
     /// <summary>
-    /// 在后台线程串行执行可取消的数据库读取；取消后不会继续占用仓储锁创建过期快照。
+    /// 串行等待可取消的仓储操作；取消后不会继续占用仓储锁创建过期结果。
     /// </summary>
-    private async Task<TResult> RunRepositoryOperationAsync<TResult>(Func<TResult> operation, CancellationToken cancellationToken)
+    private async Task<TResult> RunRepositoryOperationAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> operation,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
         await _repositoryOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            return await Task.Run(operation, cancellationToken).ConfigureAwait(false);
+            return await operation(cancellationToken).ConfigureAwait(false);
         }
         finally
         {

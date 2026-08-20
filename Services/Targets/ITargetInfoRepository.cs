@@ -8,15 +8,15 @@ namespace CombatSimulation.Services.Targets;
 /// </summary>
 public interface ITargetInfoRepository
 {
-    IReadOnlyList<TargetInfoItem> LoadTargets();
-    CombatDatabaseSnapshot CreateDatabaseSnapshot();
-    void AddTarget(TargetInfoItem target);
-    void UpdateTarget(TargetInfoItem target);
-    void DeleteTarget(string targetCode);
-    void AddSystem(string targetCode, TargetSystemInfoItem system);
-    void UpdateSystem(string targetCode, string originalSystemCode, TargetSystemInfoItem system);
-    string? DeleteSystem(string targetCode, string systemCode);
-    void AddPart(string targetCode, TargetPartInfoItem part);
-    void UpdatePart(string targetCode, string originalPartCode, TargetPartInfoItem part);
-    string? DeletePart(string targetCode, string partCode);
+    Task<IReadOnlyList<TargetInfoItem>> LoadTargetsAsync(CancellationToken cancellationToken = default);
+    Task<CombatDatabaseSnapshot> CreateDatabaseSnapshotAsync(CancellationToken cancellationToken = default);
+    Task AddTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default);
+    Task UpdateTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default);
+    Task DeleteTargetAsync(string targetCode, CancellationToken cancellationToken = default);
+    Task AddSystemAsync(string targetCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default);
+    Task UpdateSystemAsync(string targetCode, string originalSystemCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default);
+    Task<string?> DeleteSystemAsync(string targetCode, string systemCode, CancellationToken cancellationToken = default);
+    Task AddPartAsync(string targetCode, TargetPartInfoItem part, CancellationToken cancellationToken = default);
+    Task UpdatePartAsync(string targetCode, string originalPartCode, TargetPartInfoItem part, CancellationToken cancellationToken = default);
+    Task<string?> DeletePartAsync(string targetCode, string partCode, CancellationToken cancellationToken = default);
 }

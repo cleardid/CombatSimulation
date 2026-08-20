@@ -88,7 +88,7 @@ public sealed partial class TargetInfoViewModel
 
             // 先写数据库。数据库成功后再修改内存和界面，避免界面出现未持久化的数据。
             string targetCode = SelectedTarget.Code;
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddSystem(targetCode, newSystem));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddSystemAsync(targetCode, newSystem));
 
             if (isTopSystem)
             {
@@ -144,7 +144,7 @@ public sealed partial class TargetInfoViewModel
 
             // 先写数据库，避免本地树节点已经添加但数据库保存失败。
             string targetCode = SelectedTarget.Code;
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddPart(targetCode, newPart));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddPartAsync(targetCode, newPart));
 
             parentSystem.Parts.Add(newPart);
             TargetStructureTreeNode newNode = TargetStructureTreeNode.ForPart(newPart);
@@ -198,7 +198,7 @@ public sealed partial class TargetInfoViewModel
 
             // 仓储层负责同步数据库中的子系统 ParentCode 和部件 SystemCode。
             string targetCode = SelectedTarget.Code;
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateSystem(targetCode, oldSystemCode, editedSystem));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateSystemAsync(targetCode, oldSystemCode, editedSystem));
 
             // 数据库成功后再覆盖当前内存对象。这样 TreeView 绑定对象不会被整体替换。
             system.SystemName = editedSystem.SystemName;
@@ -273,7 +273,7 @@ public sealed partial class TargetInfoViewModel
             // 先提交数据库。若写入失败，Unity 和本地绑定对象均保持原状态；
             // 若后续 Unity 暂时不可用，则以数据库快照在重连后恢复一致。
             string targetCode = SelectedTarget.Code;
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdatePart(targetCode, oldPartCode, editedPart));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdatePartAsync(targetCode, oldPartCode, editedPart));
 
             // 不替换 part 实例，直接复制属性。这样 TreeView、详情面板、弹窗引用都能继续使用同一对象。
             ApplyPartUpdate(part, editedPart);
@@ -360,7 +360,7 @@ public sealed partial class TargetInfoViewModel
                 string targetCode = SelectedTarget.Code;
                 string partCode = node.Part.PartCode;
                 string? deletionBlockReason = await RunRepositoryOperationAsync(
-                    () => _targetInfoRepository.DeletePart(targetCode, partCode));
+                    () => _targetInfoRepository.DeletePartAsync(targetCode, partCode));
                 if (deletionBlockReason != null)
                 {
                     StatusText = deletionBlockReason;
@@ -390,7 +390,7 @@ public sealed partial class TargetInfoViewModel
                 string targetCode = SelectedTarget.Code;
                 string systemCode = node.System.SystemCode;
                 string? deletionBlockReason = await RunRepositoryOperationAsync(
-                    () => _targetInfoRepository.DeleteSystem(targetCode, systemCode));
+                    () => _targetInfoRepository.DeleteSystemAsync(targetCode, systemCode));
                 if (deletionBlockReason != null)
                 {
                     StatusText = deletionBlockReason;

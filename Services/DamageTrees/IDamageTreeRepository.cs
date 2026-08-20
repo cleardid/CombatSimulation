@@ -7,13 +7,14 @@ namespace CombatSimulation.Services.DamageTrees;
 /// </summary>
 public interface IDamageTreeRepository
 {
-    IReadOnlyList<DamageTreeInfoItem> LoadDamageTrees(
+    Task<IReadOnlyList<DamageTreeInfoItem>> LoadDamageTreesAsync(
         string targetCode,
-        IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null);
-    void AddDamageTree(DamageTreeInfoItem tree);
-    void UpdateDamageTree(DamageTreeInfoItem tree);
-    void DeleteDamageTree(string damageTreeCode);
-    void AddNode(DamageTreeNodeItem node);
-    void UpdateNode(string originalNodeCode, DamageTreeNodeItem node);
-    void DeleteNode(string damageTreeCode, string nodeCode);
+        IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null,
+        CancellationToken cancellationToken = default);
+    Task AddDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default);
+    Task UpdateDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default);
+    Task DeleteDamageTreeAsync(string damageTreeCode, CancellationToken cancellationToken = default);
+    Task AddNodeAsync(DamageTreeNodeItem node, CancellationToken cancellationToken = default);
+    Task UpdateNodeAsync(string originalNodeCode, DamageTreeNodeItem node, CancellationToken cancellationToken = default);
+    Task DeleteNodeAsync(string damageTreeCode, string nodeCode, CancellationToken cancellationToken = default);
 }

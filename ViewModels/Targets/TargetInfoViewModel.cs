@@ -91,7 +91,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(unityCommandService);
         _unitySyncCoordinator = new TargetUnitySyncCoordinator(
             unityCommandService,
-            cancellationToken => RunRepositoryOperationAsync(_targetInfoRepository.CreateDatabaseSnapshot, cancellationToken),
+            cancellationToken => RunRepositoryOperationAsync(token => _targetInfoRepository.CreateDatabaseSnapshotAsync(token), cancellationToken),
             CaptureUnityDisplayState,
             SetStatusTextOnUiThread,
             ownsUnityCommandService);

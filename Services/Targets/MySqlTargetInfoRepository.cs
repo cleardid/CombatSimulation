@@ -54,7 +54,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 读取全部目标及其系统、部件结构。
     /// </summary>
-    public IReadOnlyList<TargetInfoItem> LoadTargets()
+    public Task<IReadOnlyList<TargetInfoItem>> LoadTargetsAsync(CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(LoadTargets, cancellationToken);
+
+    private IReadOnlyList<TargetInfoItem> LoadTargets()
     {
         MySqlLog.Log("开始读取目标信息。 ");
 
@@ -74,7 +77,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// 直接读取 MySQL 原始表结构，避免界面模型二次转换遗漏字段；
     /// 单连接事务保证 Unity 不会收到跨写入时点拼接出的混合快照。
     /// </remarks>
-    public CombatDatabaseSnapshot CreateDatabaseSnapshot()
+    public Task<CombatDatabaseSnapshot> CreateDatabaseSnapshotAsync(CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(CreateDatabaseSnapshot, cancellationToken);
+
+    private CombatDatabaseSnapshot CreateDatabaseSnapshot()
     {
         using LoadAndWriteDb db = OpenDb();
 
@@ -93,7 +99,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 新增目标信息。
     /// </summary>
-    public void AddTarget(TargetInfoItem target)
+    public Task AddTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => AddTarget(target), cancellationToken);
+
+    private void AddTarget(TargetInfoItem target)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -103,7 +112,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 更新目标信息。
     /// </summary>
-    public void UpdateTarget(TargetInfoItem target)
+    public Task UpdateTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => UpdateTarget(target), cancellationToken);
+
+    private void UpdateTarget(TargetInfoItem target)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -113,7 +125,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 删除目标及其全部系统、部件和毁伤树信息。
     /// </summary>
-    public void DeleteTarget(string targetCode)
+    public Task DeleteTargetAsync(string targetCode, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => DeleteTarget(targetCode), cancellationToken);
+
+    private void DeleteTarget(string targetCode)
     {
         if (string.IsNullOrWhiteSpace(targetCode))
         {
@@ -150,7 +165,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 新增目标系统。
     /// </summary>
-    public void AddSystem(string targetCode, TargetSystemInfoItem system)
+    public Task AddSystemAsync(string targetCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => AddSystem(targetCode, system), cancellationToken);
+
+    private void AddSystem(string targetCode, TargetSystemInfoItem system)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -160,7 +178,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 更新目标系统。
     /// </summary>
-    public void UpdateSystem(string targetCode, string originalSystemCode, TargetSystemInfoItem system)
+    public Task UpdateSystemAsync(string targetCode, string originalSystemCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => UpdateSystem(targetCode, originalSystemCode, system), cancellationToken);
+
+    private void UpdateSystem(string targetCode, string originalSystemCode, TargetSystemInfoItem system)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -200,7 +221,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 删除目标系统及其子系统和底层部件。
     /// </summary>
-    public string? DeleteSystem(string targetCode, string systemCode)
+    public Task<string?> DeleteSystemAsync(string targetCode, string systemCode, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => DeleteSystem(targetCode, systemCode), cancellationToken);
+
+    private string? DeleteSystem(string targetCode, string systemCode)
     {
         if (string.IsNullOrWhiteSpace(systemCode))
         {
@@ -248,7 +272,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 新增目标部件。
     /// </summary>
-    public void AddPart(string targetCode, TargetPartInfoItem part)
+    public Task AddPartAsync(string targetCode, TargetPartInfoItem part, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => AddPart(targetCode, part), cancellationToken);
+
+    private void AddPart(string targetCode, TargetPartInfoItem part)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -258,7 +285,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 更新目标部件。
     /// </summary>
-    public void UpdatePart(string targetCode, string originalPartCode, TargetPartInfoItem part)
+    public Task UpdatePartAsync(string targetCode, string originalPartCode, TargetPartInfoItem part, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => UpdatePart(targetCode, originalPartCode, part), cancellationToken);
+
+    private void UpdatePart(string targetCode, string originalPartCode, TargetPartInfoItem part)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -297,7 +327,10 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
     /// <summary>
     /// 删除目标部件。
     /// </summary>
-    public string? DeletePart(string targetCode, string partCode)
+    public Task<string?> DeletePartAsync(string targetCode, string partCode, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => DeletePart(targetCode, partCode), cancellationToken);
+
+    private string? DeletePart(string targetCode, string partCode)
     {
         if (string.IsNullOrWhiteSpace(partCode))
         {

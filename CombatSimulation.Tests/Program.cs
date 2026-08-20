@@ -77,6 +77,9 @@ internal static class Program
         AssertEqual(0, targetRepository.LoadCount);
         AssertEqual(1, unityService.SubscriberCount);
 
+        viewModel.InitializeAsync().GetAwaiter().GetResult();
+        AssertEqual(1, targetRepository.LoadCount);
+
         viewModel.Dispose();
         AssertEqual(0, unityService.SubscriberCount);
         AssertEqual(0, unityService.DisposeCount);
@@ -115,39 +118,41 @@ internal static class Program
     {
         public int LoadCount { get; private set; }
 
-        public IReadOnlyList<TargetInfoItem> LoadTargets()
+        public Task<IReadOnlyList<TargetInfoItem>> LoadTargetsAsync(CancellationToken cancellationToken = default)
         {
             LoadCount++;
-            return Array.Empty<TargetInfoItem>();
+            return Task.FromResult<IReadOnlyList<TargetInfoItem>>(Array.Empty<TargetInfoItem>());
         }
 
-        public CombatDatabaseSnapshot CreateDatabaseSnapshot() => new();
-        public void AddTarget(TargetInfoItem target) => throw new NotSupportedException();
-        public void UpdateTarget(TargetInfoItem target) => throw new NotSupportedException();
-        public void DeleteTarget(string targetCode) => throw new NotSupportedException();
-        public void AddSystem(string targetCode, TargetSystemInfoItem system) => throw new NotSupportedException();
-        public void UpdateSystem(string targetCode, string originalSystemCode, TargetSystemInfoItem system) => throw new NotSupportedException();
-        public string? DeleteSystem(string targetCode, string systemCode) => throw new NotSupportedException();
-        public void AddPart(string targetCode, TargetPartInfoItem part) => throw new NotSupportedException();
-        public void UpdatePart(string targetCode, string originalPartCode, TargetPartInfoItem part) => throw new NotSupportedException();
-        public string? DeletePart(string targetCode, string partCode) => throw new NotSupportedException();
+        public Task<CombatDatabaseSnapshot> CreateDatabaseSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CombatDatabaseSnapshot());
+
+        public Task AddTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateTargetAsync(TargetInfoItem target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteTargetAsync(string targetCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task AddSystemAsync(string targetCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateSystemAsync(string targetCode, string originalSystemCode, TargetSystemInfoItem system, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<string?> DeleteSystemAsync(string targetCode, string systemCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task AddPartAsync(string targetCode, TargetPartInfoItem part, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdatePartAsync(string targetCode, string originalPartCode, TargetPartInfoItem part, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<string?> DeletePartAsync(string targetCode, string partCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class InMemoryDamageTreeRepository : IDamageTreeRepository
     {
-        public IReadOnlyList<DamageTreeInfoItem> LoadDamageTrees(
+        public Task<IReadOnlyList<DamageTreeInfoItem>> LoadDamageTreesAsync(
             string targetCode,
-            IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null) =>
-            Array.Empty<DamageTreeInfoItem>();
+            IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<DamageTreeInfoItem>>(Array.Empty<DamageTreeInfoItem>());
 
-        public void AddDamageTree(DamageTreeInfoItem tree) => throw new NotSupportedException();
-        public void UpdateDamageTree(DamageTreeInfoItem tree) => throw new NotSupportedException();
-        public void DeleteDamageTree(string damageTreeCode) => throw new NotSupportedException();
-        public void AddNode(DamageTreeNodeItem node) => throw new NotSupportedException();
-        public void UpdateNode(string originalNodeCode, DamageTreeNodeItem node) => throw new NotSupportedException();
-        public void DeleteNode(string damageTreeCode, string nodeCode) => throw new NotSupportedException();
+        public Task AddDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteDamageTreeAsync(string damageTreeCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task AddNodeAsync(DamageTreeNodeItem node, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task UpdateNodeAsync(string originalNodeCode, DamageTreeNodeItem node, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteNodeAsync(string damageTreeCode, string nodeCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
-
     private sealed class RecordingUnityCommandService : IUnityCommandService, IDisposable
     {
         private EventHandler<UnityMessage>? _eventReceived;

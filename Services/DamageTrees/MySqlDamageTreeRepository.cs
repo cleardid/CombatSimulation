@@ -53,7 +53,13 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// </summary>
     /// <param name="targetCode">目标唯一标识。</param>
     /// <param name="partsByCode">目标部件索引，用于把叶子节点的 PartCode 翻译为部件名称。</param>
-    public IReadOnlyList<DamageTreeInfoItem> LoadDamageTrees(string targetCode, IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null)
+    public Task<IReadOnlyList<DamageTreeInfoItem>> LoadDamageTreesAsync(
+        string targetCode,
+        IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode = null,
+        CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => LoadDamageTrees(targetCode, partsByCode), cancellationToken);
+
+    private IReadOnlyList<DamageTreeInfoItem> LoadDamageTrees(string targetCode, IReadOnlyDictionary<string, TargetPartInfoItem>? partsByCode)
     {
         if (string.IsNullOrWhiteSpace(targetCode))
         {
@@ -70,7 +76,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 新增毁伤树及其根节点。
     /// </summary>
-    public void AddDamageTree(DamageTreeInfoItem tree)
+    public Task AddDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => AddDamageTree(tree), cancellationToken);
+
+    private void AddDamageTree(DamageTreeInfoItem tree)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -88,7 +97,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 修改毁伤树基础信息。根节点名称若在草稿中被修改，也会同步写回节点表。
     /// </summary>
-    public void UpdateDamageTree(DamageTreeInfoItem tree)
+    public Task UpdateDamageTreeAsync(DamageTreeInfoItem tree, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => UpdateDamageTree(tree), cancellationToken);
+
+    private void UpdateDamageTree(DamageTreeInfoItem tree)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -106,7 +118,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 删除毁伤树及其所有节点。
     /// </summary>
-    public void DeleteDamageTree(string damageTreeCode)
+    public Task DeleteDamageTreeAsync(string damageTreeCode, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => DeleteDamageTree(damageTreeCode), cancellationToken);
+
+    private void DeleteDamageTree(string damageTreeCode)
     {
         if (string.IsNullOrWhiteSpace(damageTreeCode))
         {
@@ -126,7 +141,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 新增毁伤节点。
     /// </summary>
-    public void AddNode(DamageTreeNodeItem node)
+    public Task AddNodeAsync(DamageTreeNodeItem node, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => AddNode(node), cancellationToken);
+
+    private void AddNode(DamageTreeNodeItem node)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -136,7 +154,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 修改毁伤节点。如果节点主键变化，会同步修正子节点的父节点引用。
     /// </summary>
-    public void UpdateNode(string originalNodeCode, DamageTreeNodeItem node)
+    public Task UpdateNodeAsync(string originalNodeCode, DamageTreeNodeItem node, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => UpdateNode(originalNodeCode, node), cancellationToken);
+
+    private void UpdateNode(string originalNodeCode, DamageTreeNodeItem node)
     {
         using LoadAndWriteDb db = OpenDb();
         EnsureTables(db);
@@ -165,7 +186,10 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
     /// <summary>
     /// 删除节点及其全部后代节点。
     /// </summary>
-    public void DeleteNode(string damageTreeCode, string nodeCode)
+    public Task DeleteNodeAsync(string damageTreeCode, string nodeCode, CancellationToken cancellationToken = default) =>
+        BackgroundRepositoryOperation.RunAsync(() => DeleteNode(damageTreeCode, nodeCode), cancellationToken);
+
+    private void DeleteNode(string damageTreeCode, string nodeCode)
     {
         if (string.IsNullOrWhiteSpace(damageTreeCode) || string.IsNullOrWhiteSpace(nodeCode))
         {

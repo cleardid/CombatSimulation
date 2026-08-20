@@ -37,7 +37,7 @@ public sealed partial class TargetInfoViewModel
             EnsureTargetStructureTree(newTarget);
 
             // 先写数据库，保存成功后再加入界面集合。
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddTarget(newTarget));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.AddTargetAsync(newTarget));
 
             Targets.Add(newTarget);
             RebuildTargetCategories();
@@ -82,7 +82,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateTarget(editedTarget));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateTargetAsync(editedTarget));
 
             // 直接修改当前绑定对象，避免替换 SelectedTarget 导致结构树和详情区域引用断开。
             target.Name = editedTarget.Name;
@@ -126,7 +126,7 @@ public sealed partial class TargetInfoViewModel
         {
             bool deletedSelectedTarget = ReferenceEquals(SelectedTarget, target);
 
-            await RunRepositoryOperationAsync(() => _targetInfoRepository.DeleteTarget(target.Code));
+            await RunRepositoryOperationAsync(() => _targetInfoRepository.DeleteTargetAsync(target.Code));
 
             // 数据库删除成功后再解除勾选事件并移除界面数据，避免失败时界面状态丢失。
             DetachCheckStateHandlers(target);

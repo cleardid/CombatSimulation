@@ -62,7 +62,8 @@ public sealed partial class TargetInfoViewModel
         {
             IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = BuildPartLookup(target);
             IReadOnlyList<DamageTreeInfoItem> storedTrees = await RunRepositoryOperationAsync(
-                () => _damageTreeRepository.LoadDamageTrees(target.Code, partLookup));
+                cancellationToken => _damageTreeRepository.LoadDamageTreesAsync(target.Code, partLookup, cancellationToken),
+                loadCts.Token);
             if (loadCts.IsCancellationRequested || !ReferenceEquals(SelectedTarget, target))
             {
                 return;
@@ -233,7 +234,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddDamageTree(newTree));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddDamageTreeAsync(newTree));
             DamageTrees.Add(newTree);
             SelectedDamageTree = newTree;
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
@@ -268,7 +269,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateDamageTree(editedTree));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateDamageTreeAsync(editedTree));
 
             originalTree.DamageTreeName = editedTree.DamageTreeName;
             originalTree.DamageTreeDescription = editedTree.DamageTreeDescription;
@@ -309,7 +310,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteDamageTree(tree.DamageTreeCode));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteDamageTreeAsync(tree.DamageTreeCode));
             DamageTrees.Remove(tree);
             SelectedDamageTree = DamageTrees.FirstOrDefault();
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
@@ -352,7 +353,7 @@ public sealed partial class TargetInfoViewModel
             newNode.ParentNodeCode = parentNode.NodeCode;
             newNode.SortOrder = parentNode.Children.Count;
 
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddNode(newNode));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.AddNodeAsync(newNode));
             parentNode.Children.Add(newNode);
             parentNode.IsExpanded = true;
             SelectDamageTreeNode(newNode);
@@ -392,7 +393,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateNode(originalNode.NodeCode, editedNode));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateNodeAsync(originalNode.NodeCode, editedNode));
             ApplyDamageNodeUpdate(originalNode, editedNode);
             SelectDamageTreeNode(originalNode);
             RefreshDamageNodeDetailRows(originalNode);
@@ -430,7 +431,7 @@ public sealed partial class TargetInfoViewModel
             DamageTreeNodeItem parent = node.Parent;
             string damageTreeCode = SelectedDamageTree.DamageTreeCode;
             string nodeCode = node.NodeCode;
-            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteNode(damageTreeCode, nodeCode));
+            await RunRepositoryOperationAsync(() => _damageTreeRepository.DeleteNodeAsync(damageTreeCode, nodeCode));
             parent.Children.Remove(node);
             SelectDamageTreeNode(parent);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
