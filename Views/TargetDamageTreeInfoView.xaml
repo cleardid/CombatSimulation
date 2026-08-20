@@ -121,34 +121,26 @@
                         <ScrollViewer x:Name="DamageTreePreviewScrollViewer"
                                       HorizontalScrollBarVisibility="Auto"
                                       VerticalScrollBarVisibility="Auto"
+                                      HorizontalContentAlignment="Stretch"
                                       CanContentScroll="False"
                                       PanningMode="Both"
                                       Background="Transparent"
                                       ClipToBounds="True"
                                       Focusable="True"
-                                      SizeChanged="OnDamageTreePreviewViewportSizeChanged"
                                       PreviewMouseWheel="OnDamageTreePreviewMouseWheel">
-
-                            <!--修复右下角白色小方块。
-                                当横向和竖向滚动条同时出现时，ScrollViewer 会显示一个 corner 区域。
-                                默认 corner 使用系统 ControlBrush，在深色界面中会显示成白色或浅色。 -->
                             <ScrollViewer.Resources>
                                 <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}"
-                                                   Color="Transparent" />
+                                                 Color="Transparent" />
                             </ScrollViewer.Resources>
-                            
-                            <Grid x:Name="DamageTreePreviewCanvas"
-                                  HorizontalAlignment="Left"
-                                  VerticalAlignment="Top"
-                                  ClipToBounds="False">
-                                <!--
-                                    预览图承载容器。
-                                    使用 Canvas 做绝对定位，仅调整节点坐标，不改变原有 EventRectangle / GateIcon / ConnectLine 的边框和文字样式。
-                                -->
-                                <Canvas x:Name="DamageTreeShow"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Top"
-                                        ClipToBounds="False" />
+
+                            <Grid MinWidth="{Binding ViewportWidth, ElementName=DamageTreePreviewScrollViewer}"
+                                  MinHeight="{Binding ViewportHeight, ElementName=DamageTreePreviewScrollViewer}"
+                                  Background="Transparent">
+                                <controls:DamageTreeGraphView x:Name="DamageTreeShow"
+                                                              RootNodes="{Binding SelectedDamageTree.RootNodes}"
+                                                              SelectedNode="{Binding SelectedDamageTreeNode}"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Top" />
                             </Grid>
                         </ScrollViewer>
                     </Border>

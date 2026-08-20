@@ -2,55 +2,52 @@ using CombatSimulation.Models;
 using System.Collections;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Globalization;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace CombatSimulation.Controls;
 
 /// <summary>
-/// 毁伤树逻辑图预览控件。
+/// 独立的毁伤树逻辑预览控件，负责节点订阅、布局、绘制、缩放和图片导出。
 /// </summary>
-/// <remarks>
-/// 左侧 TreeView 用于编辑节点，本控件只负责把同一批 DamageTreeNodeItem 绘制成“方框 + 连线 + 逻辑门”的结构图。
-/// 布局规则为：叶节点按固定间距排列；非叶父节点横向位置取首个子节点和末个子节点中心点的中点。
-/// </remarks>
-public sealed class DamageTreeGraphView : FrameworkElement
+public sealed class DamageTreeGraphView : Canvas
 {
     public static readonly DependencyProperty RootNodesProperty = DependencyProperty.Register(
         nameof(RootNodes),
         typeof(IEnumerable),
         typeof(DamageTreeGraphView),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure, OnRootNodesChanged));
+        new FrameworkPropertyMetadata(null, OnGraphSourceChanged));
 
-    private const double HorizontalGap = 34d;
-    private const double LeafPitch = VerticalNodeWidth + HorizontalGap;
-    private const double LevelConnectorGap = 78d;
-    private const double TopMargin = 20d;
-    private const double LeftMargin = 20d;
-    private const double RightMargin = 20d;
-    private const double BottomMargin = 30d;
-    private const double HorizontalNodeWidth = 180d;
-    private const double HorizontalNodeHeight = 30d;
-    private const double VerticalNodeWidth = 38d;
-    private const double VerticalNodeMinHeight = 92d;
-    private const double VerticalNodeMaxHeight = 180d;
-    private const double GateSize = 28d;
+    public static readonly DependencyProperty SelectedNodeProperty = DependencyProperty.Register(
+        nameof(SelectedNode),
+        typeof(DamageTreeNodeItem),
+        typeof(DamageTreeGraphView),
+        new FrameworkPropertyMetadata(null, OnGraphSourceChanged));
 
-    private static readonly Pen s_linePen = new(new SolidColorBrush(Color.FromArgb(190, 191, 212, 245)), 1d);
-    private static readonly Pen s_boxPen = new(new SolidColorBrush(Color.FromArgb(235, 210, 226, 250)), 1d);
-    private static readonly Pen s_gatePen = new(new SolidColorBrush(Color.FromArgb(235, 210, 226, 250)), 1d);
-    private static readonly Brush s_nodeBrush = new SolidColorBrush(Color.FromArgb(80, 19, 50, 76));
-    private static readonly Brush s_gateBrush = new SolidColorBrush(Color.FromArgb(72, 15, 23, 42));
-    private static readonly Brush s_textBrush = new SolidColorBrush(Color.FromRgb(234, 246, 255));
-    private static readonly Brush s_gateTextBrush = new SolidColorBrush(Color.FromRgb(246, 232, 74));
-    private static readonly Brush s_emptyTextBrush = new SolidColorBrush(Color.FromRgb(191, 212, 245));
+    private const double ZoomMin = 0.25d;
+    private const double ZoomMax = 4d;
+    private const double ZoomStep = 1.1d;
 
     private readonly HashSet<DamageTreeNodeItem> _subscribedNodes = new();
     private readonly Dictionary<DamageTreeNodeItem, NotifyCollectionChangedEventHandler> _childrenHandlers = new();
+    private readonly ScaleTransform _zoomTransform = new(1d, 1d);
+    private INotifyCollectionChanged? _rootCollection;
+    private Size _graphSize = new(420d, 260d);
+    private bool _refreshQueued;
 
-    private LayoutNode[] _layoutRoots = Array.Empty<LayoutNode>();
-    private Size _desiredGraphSize = new(420d, 260d);
+    public DamageTreeGraphView()
+    {
+        Background = Brushes.Transparent;
+        ClipToBounds = false;
+        LayoutTransform = _zoomTransform;
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
 
     public IEnumerable? RootNodes
     {
@@ -58,94 +55,146 @@ public sealed class DamageTreeGraphView : FrameworkElement
         set => SetValue(RootNodesProperty, value);
     }
 
-    protected override Size MeasureOverride(Size availableSize)
+    public DamageTreeNodeItem? SelectedNode
     {
-        UpdateLayoutTree();
-        return _desiredGraphSize;
+        get => (DamageTreeNodeItem?)GetValue(SelectedNodeProperty);
+        set => SetValue(SelectedNodeProperty, value);
     }
 
-    protected override void OnRender(DrawingContext drawingContext)
+    public bool HasGraph => Children.Count > 0;
+
+    public bool TryHandleZoom(MouseWheelEventArgs e, ScrollViewer scrollViewer)
     {
-        base.OnRender(drawingContext);
-        UpdateLayoutTree();
-
-        if (_layoutRoots.Length == 0)
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
         {
-            DrawEmptyText(drawingContext);
-            return;
+            return false;
         }
 
-        foreach (LayoutNode root in _layoutRoots)
+        e.Handled = true;
+        double oldZoom = _zoomTransform.ScaleX;
+        double factor = e.Delta > 0 ? ZoomStep : 1d / ZoomStep;
+        double newZoom = Math.Clamp(oldZoom * factor, ZoomMin, ZoomMax);
+        if (Math.Abs(newZoom - oldZoom) < 0.0001d)
         {
-            DrawConnectors(drawingContext, root);
+            return true;
         }
 
-        foreach (LayoutNode root in _layoutRoots)
-        {
-            DrawNodeRecursive(drawingContext, root);
-        }
+        Point contentPoint = e.GetPosition(this);
+        Point viewportPoint = e.GetPosition(scrollViewer);
+        _zoomTransform.ScaleX = newZoom;
+        _zoomTransform.ScaleY = newZoom;
+
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                UpdateLayout();
+                scrollViewer.ScrollToHorizontalOffset(Math.Max(0d, contentPoint.X * newZoom - viewportPoint.X));
+                scrollViewer.ScrollToVerticalOffset(Math.Max(0d, contentPoint.Y * newZoom - viewportPoint.Y));
+            }),
+            DispatcherPriority.Background);
+        return true;
     }
 
-    private static void OnRootNodesChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
+    public void ExportToFile(string fileName)
+    {
+        RefreshGraph();
+        UpdateLayout();
+        if (!HasGraph || ActualWidth <= 0d || ActualHeight <= 0d)
+        {
+            throw new InvalidOperationException("当前毁伤树预览图尺寸无效，无法导出。");
+        }
+
+        const double dpi = 96d;
+        int pixelWidth = Math.Max(1, (int)Math.Ceiling(ActualWidth));
+        int pixelHeight = Math.Max(1, (int)Math.Ceiling(ActualHeight));
+        DrawingVisual exportVisual = new();
+        using (DrawingContext context = exportVisual.RenderOpen())
+        {
+            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(15, 23, 42)), null, new Rect(0d, 0d, ActualWidth, ActualHeight));
+            context.DrawRectangle(new VisualBrush(this), null, new Rect(0d, 0d, ActualWidth, ActualHeight));
+        }
+
+        RenderTargetBitmap bitmap = new(pixelWidth, pixelHeight, dpi, dpi, PixelFormats.Pbgra32);
+        bitmap.Render(exportVisual);
+        BitmapEncoder encoder = CreateBitmapEncoder(fileName);
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using FileStream stream = File.Create(fileName);
+        encoder.Save(stream);
+    }
+
+    protected override Size MeasureOverride(Size constraint)
+    {
+        foreach (UIElement child in InternalChildren)
+        {
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        }
+
+        return _graphSize;
+    }
+
+    protected override Size ArrangeOverride(Size arrangeSize)
+    {
+        foreach (UIElement child in InternalChildren)
+        {
+            double left = GetLeft(child);
+            double top = GetTop(child);
+            child.Arrange(new Rect(
+                double.IsNaN(left) ? 0d : left,
+                double.IsNaN(top) ? 0d : top,
+                child.DesiredSize.Width,
+                child.DesiredSize.Height));
+        }
+
+        return arrangeSize;
+    }
+
+    private static void OnGraphSourceChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
     {
         if (dependencyObject is not DamageTreeGraphView view)
         {
             return;
         }
 
-        if (e.OldValue is INotifyCollectionChanged oldCollection)
-        {
-            oldCollection.CollectionChanged -= view.OnRootCollectionChanged;
-        }
-
-        if (e.NewValue is INotifyCollectionChanged newCollection)
-        {
-            newCollection.CollectionChanged += view.OnRootCollectionChanged;
-        }
-
-        view.DetachNodeSubscriptions();
-        view.AttachNodeSubscriptions(view.EnumerateCurrentRootNodes());
-        view.InvalidateMeasure();
-        view.InvalidateVisual();
+        view.AttachGraphSubscriptions();
+        view.QueueRefresh();
     }
 
-    private void OnRootCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // 根节点集合变化同样会影响图尺寸；通常只有一个根节点，但这里保留历史数据容错。
-        DetachNodeSubscriptions();
-        AttachNodeSubscriptions(EnumerateCurrentRootNodes());
-        InvalidateMeasure();
-        InvalidateVisual();
+        AttachGraphSubscriptions();
+        RefreshGraph();
     }
 
-    private void AttachNodeSubscriptions(IEnumerable<DamageTreeNodeItem> nodes)
+    private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        foreach (DamageTreeNodeItem node in nodes)
+        DetachGraphSubscriptions();
+    }
+
+    private void AttachGraphSubscriptions()
+    {
+        DetachGraphSubscriptions();
+        if (!IsLoaded)
         {
-            if (!_subscribedNodes.Add(node))
-            {
-                continue;
-            }
-
-            node.PropertyChanged += OnNodePropertyChanged;
-
-            NotifyCollectionChangedEventHandler handler = (_, _) =>
-            {
-                // 子节点集合变化会影响图的横向布局，必须重新订阅并重新测量。
-                DetachNodeSubscriptions();
-                AttachNodeSubscriptions(EnumerateCurrentRootNodes());
-                InvalidateMeasure();
-                InvalidateVisual();
-            };
-
-            node.Children.CollectionChanged += handler;
-            _childrenHandlers[node] = handler;
-            AttachNodeSubscriptions(node.Children);
+            return;
         }
+
+        if (RootNodes is INotifyCollectionChanged collection)
+        {
+            _rootCollection = collection;
+            _rootCollection.CollectionChanged += OnRootCollectionChanged;
+        }
+
+        AttachNodeSubscriptions(EnumerateRootNodes());
     }
 
-    private void DetachNodeSubscriptions()
+    private void DetachGraphSubscriptions()
     {
+        if (_rootCollection != null)
+        {
+            _rootCollection.CollectionChanged -= OnRootCollectionChanged;
+            _rootCollection = null;
+        }
+
         foreach (DamageTreeNodeItem node in _subscribedNodes)
         {
             node.PropertyChanged -= OnNodePropertyChanged;
@@ -159,6 +208,33 @@ public sealed class DamageTreeGraphView : FrameworkElement
         _subscribedNodes.Clear();
     }
 
+    private void AttachNodeSubscriptions(IEnumerable<DamageTreeNodeItem> nodes)
+    {
+        foreach (DamageTreeNodeItem node in nodes)
+        {
+            if (!_subscribedNodes.Add(node))
+            {
+                continue;
+            }
+
+            node.PropertyChanged += OnNodePropertyChanged;
+            NotifyCollectionChangedEventHandler handler = (_, _) =>
+            {
+                AttachGraphSubscriptions();
+                QueueRefresh();
+            };
+            node.Children.CollectionChanged += handler;
+            _childrenHandlers[node] = handler;
+            AttachNodeSubscriptions(node.Children);
+        }
+    }
+
+    private void OnRootCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        AttachGraphSubscriptions();
+        QueueRefresh();
+    }
+
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(DamageTreeNodeItem.NodeName)
@@ -166,12 +242,11 @@ public sealed class DamageTreeGraphView : FrameworkElement
             or nameof(DamageTreeNodeItem.VoteThreshold)
             or nameof(DamageTreeNodeItem.SortOrder))
         {
-            InvalidateMeasure();
-            InvalidateVisual();
+            QueueRefresh();
         }
     }
 
-    private IEnumerable<DamageTreeNodeItem> EnumerateCurrentRootNodes()
+    private IEnumerable<DamageTreeNodeItem> EnumerateRootNodes()
     {
         if (RootNodes == null)
         {
@@ -187,343 +262,207 @@ public sealed class DamageTreeGraphView : FrameworkElement
         }
     }
 
-    private void UpdateLayoutTree()
+    private DamageTreeNodeItem? ResolveRootNode()
     {
-        List<LayoutNode> roots = EnumerateCurrentRootNodes()
-            .OrderBy(node => node.SortOrder)
-            .Select(node => BuildLayout(node, depth: 0))
-            .ToList();
-
-        if (roots.Count == 0)
+        DamageTreeNodeItem? root = SelectedNode;
+        while (root?.Parent != null)
         {
-            _layoutRoots = Array.Empty<LayoutNode>();
-            _desiredGraphSize = new Size(420d, 260d);
-            return;
+            root = root.Parent;
         }
 
-        Dictionary<int, double> levelTops = BuildLevelTops(roots);
-        double nextLeafCenterX = LeftMargin + VerticalNodeWidth / 2d;
-        double nextRootLeft = LeftMargin;
-        GraphBounds graphBounds = GraphBounds.Empty;
-
-        foreach (LayoutNode root in roots)
-        {
-            AssignHorizontalPositions(root, ref nextLeafCenterX);
-            ApplyLevelTops(root, levelTops);
-
-            GraphBounds rootBounds = GetBounds(root);
-            double offsetX = Math.Max(0d, nextRootLeft - rootBounds.Left);
-            if (offsetX > 0d)
-            {
-                MoveLayout(root, offsetX);
-                nextLeafCenterX += offsetX;
-                rootBounds = GetBounds(root);
-            }
-
-            graphBounds = graphBounds.Include(rootBounds);
-            nextRootLeft = rootBounds.Right + HorizontalGap;
-            nextLeafCenterX = Math.Max(nextLeafCenterX, nextRootLeft + VerticalNodeWidth / 2d);
-        }
-
-        double offsetToMargin = Math.Max(0d, LeftMargin - graphBounds.Left);
-        if (offsetToMargin > 0d)
-        {
-            foreach (LayoutNode root in roots)
-            {
-                MoveLayout(root, offsetToMargin);
-            }
-
-            graphBounds = GraphBounds.Empty;
-            foreach (LayoutNode root in roots)
-            {
-                graphBounds = graphBounds.Include(GetBounds(root));
-            }
-        }
-
-        _layoutRoots = roots.ToArray();
-        _desiredGraphSize = new Size(
-            Math.Max(420d, graphBounds.Right + RightMargin),
-            Math.Max(260d, graphBounds.Bottom + BottomMargin));
+        DamageTreeNodeItem[] roots = EnumerateRootNodes().ToArray();
+        return root != null && roots.Contains(root) ? root : roots.FirstOrDefault();
     }
 
-    private static LayoutNode BuildLayout(DamageTreeNodeItem node, int depth)
+    private void QueueRefresh()
     {
-        Size nodeSize = GetNodeSize(node, depth);
-        LayoutNode layout = new(node, depth, nodeSize.Width, nodeSize.Height);
-        foreach (DamageTreeNodeItem child in node.Children.OrderBy(child => child.SortOrder))
-        {
-            layout.Children.Add(BuildLayout(child, depth + 1));
-        }
-
-        return layout;
-    }
-
-    private static Dictionary<int, double> BuildLevelTops(IEnumerable<LayoutNode> roots)
-    {
-        Dictionary<int, double> maxHeightByDepth = new();
-        foreach (LayoutNode root in roots)
-        {
-            CollectMaxHeightByDepth(root, maxHeightByDepth);
-        }
-
-        Dictionary<int, double> levelTops = new() { [0] = TopMargin };
-        int maxDepth = maxHeightByDepth.Keys.Max();
-        for (int depth = 1; depth <= maxDepth; depth++)
-        {
-            double previousTop = levelTops[depth - 1];
-            double previousHeight = maxHeightByDepth.TryGetValue(depth - 1, out double height)
-                ? height
-                : VerticalNodeMinHeight;
-            levelTops[depth] = previousTop + previousHeight + LevelConnectorGap;
-        }
-
-        return levelTops;
-    }
-
-    private static void CollectMaxHeightByDepth(LayoutNode layout, IDictionary<int, double> maxHeightByDepth)
-    {
-        if (!maxHeightByDepth.TryGetValue(layout.Depth, out double current) || layout.Height > current)
-        {
-            maxHeightByDepth[layout.Depth] = layout.Height;
-        }
-
-        foreach (LayoutNode child in layout.Children)
-        {
-            CollectMaxHeightByDepth(child, maxHeightByDepth);
-        }
-    }
-
-    private static void AssignHorizontalPositions(LayoutNode layout, ref double nextLeafCenterX)
-    {
-        if (layout.Children.Count == 0)
-        {
-            layout.CenterX = nextLeafCenterX;
-            nextLeafCenterX += LeafPitch;
-            return;
-        }
-
-        foreach (LayoutNode child in layout.Children)
-        {
-            AssignHorizontalPositions(child, ref nextLeafCenterX);
-        }
-
-        // 关键：父节点放在首、末子节点中心点的中点，而不是放在整个子树矩形宽度中心。
-        // 当某个子节点自身拥有更宽的子树时，这可以避免父节点被宽子树拖偏。
-        layout.CenterX = (layout.Children.First().CenterX + layout.Children.Last().CenterX) / 2d;
-    }
-
-    private static void ApplyLevelTops(LayoutNode layout, IReadOnlyDictionary<int, double> levelTops)
-    {
-        layout.Top = levelTops.TryGetValue(layout.Depth, out double top) ? top : TopMargin;
-        foreach (LayoutNode child in layout.Children)
-        {
-            ApplyLevelTops(child, levelTops);
-        }
-    }
-
-    private static void MoveLayout(LayoutNode layout, double offsetX)
-    {
-        layout.CenterX += offsetX;
-        foreach (LayoutNode child in layout.Children)
-        {
-            MoveLayout(child, offsetX);
-        }
-    }
-
-    private static GraphBounds GetBounds(LayoutNode layout)
-    {
-        GraphBounds bounds = GraphBounds.FromRect(layout.NodeRect);
-
-        if (layout.Children.Count > 0)
-        {
-            Point parentBottom = layout.BottomCenter;
-            double gateCenterY = parentBottom.Y + 28d;
-            double branchY = gateCenterY + 30d;
-            bounds = bounds.Include(new Rect(layout.CenterX - GateSize / 2d, gateCenterY - GateSize / 2d, GateSize, GateSize));
-            bounds = bounds.Include(new Point(layout.CenterX, branchY));
-            bounds = bounds.Include(new Point(layout.Children.First().CenterX, branchY));
-            bounds = bounds.Include(new Point(layout.Children.Last().CenterX, branchY));
-        }
-
-        foreach (LayoutNode child in layout.Children)
-        {
-            bounds = bounds.Include(GetBounds(child));
-        }
-
-        return bounds;
-    }
-
-    private static Size GetNodeSize(DamageTreeNodeItem node, int depth)
-    {
-        if (depth == 0)
-        {
-            return new Size(HorizontalNodeWidth, HorizontalNodeHeight);
-        }
-
-        // 非根节点使用竖排矩形，视觉上接近原毁伤树示意图中的纵向节点框。
-        int verticalTextLength = Math.Max(4, node.NodeName?.Trim().Length ?? 0);
-        double height = Math.Clamp(verticalTextLength * 18d + 18d, VerticalNodeMinHeight, VerticalNodeMaxHeight);
-        return new Size(VerticalNodeWidth, height);
-    }
-
-    private static void DrawConnectors(DrawingContext drawingContext, LayoutNode layout)
-    {
-        if (layout.Children.Count == 0)
+        if (_refreshQueued)
         {
             return;
         }
 
-        Point parentBottom = layout.BottomCenter;
-        Point gateCenter = new(layout.CenterX, parentBottom.Y + 28d);
-        Rect gateRect = new(gateCenter.X - GateSize / 2d, gateCenter.Y - GateSize / 2d, GateSize, GateSize);
-        double branchY = gateCenter.Y + 30d;
-
-        drawingContext.DrawLine(s_linePen, parentBottom, new Point(gateCenter.X, gateRect.Top));
-        drawingContext.DrawRoundedRectangle(s_gateBrush, s_gatePen, gateRect, 2d, 2d);
-        DrawCenteredText(drawingContext, GetGateText(layout.Node), gateRect, s_gateTextBrush, 15d, FontWeights.SemiBold);
-        drawingContext.DrawLine(s_linePen, new Point(gateCenter.X, gateRect.Bottom), new Point(gateCenter.X, branchY));
-
-        double firstChildX = layout.Children.First().CenterX;
-        double lastChildX = layout.Children.Last().CenterX;
-        drawingContext.DrawLine(s_linePen, new Point(firstChildX, branchY), new Point(lastChildX, branchY));
-
-        foreach (LayoutNode child in layout.Children)
+        _refreshQueued = true;
+        Dispatcher.BeginInvoke(new Action(() =>
         {
-            drawingContext.DrawLine(s_linePen, new Point(child.CenterX, branchY), child.TopCenter);
-            DrawConnectors(drawingContext, child);
+            _refreshQueued = false;
+            RefreshGraph();
+        }), DispatcherPriority.Background);
+    }
+
+    private void RefreshGraph()
+    {
+        Children.Clear();
+        DamageTreeNodeItem? rootNode = ResolveRootNode();
+        if (rootNode == null)
+        {
+            _graphSize = new Size(420d, 260d);
+            InvalidateMeasure();
+            return;
+        }
+
+        Color color = Colors.White;
+        const double unitWidth = 24d;
+        const double unitHeight = 24d;
+        Dictionary<int, List<DamageTreeLayerInfo>> infos = new();
+        Dictionary<int, List<DamageTreeLayerLineInfo>> lineInfos = new();
+        DamageTreeLayerLayout.Convert(0, new[] { rootNode }, infos, lineInfos);
+        if (infos.Count == 0 || !infos.TryGetValue(1, out List<DamageTreeLayerInfo>? rootLayer))
+        {
+            _graphSize = new Size(420d, 260d);
+            InvalidateMeasure();
+            return;
+        }
+
+        List<double> rows = BuildRowWeights(infos);
+        int columns = Math.Max(4, rootLayer.Sum(info => info.Include) * 2 + 2);
+        _graphSize = new Size(columns * unitWidth, rows.Sum() * unitHeight);
+        double[] rowTops = BuildRowTops(rows, unitHeight);
+        DrawNodes(infos, color, unitWidth, unitHeight, rows, rowTops);
+        DrawLines(lineInfos, color, unitWidth, unitHeight, rows, rowTops);
+        InvalidateMeasure();
+        InvalidateArrange();
+    }
+
+    private static List<double> BuildRowWeights(IReadOnlyDictionary<int, List<DamageTreeLayerInfo>> infos)
+    {
+        List<double> rows = new() { 1d };
+        foreach (KeyValuePair<int, List<DamageTreeLayerInfo>> item in infos.OrderBy(item => item.Key))
+        {
+            if (item.Key == 1)
+            {
+                rows.Add(1.5d);
+            }
+            else
+            {
+                rows.Add(1.5d);
+                rows.Add(1d);
+                rows.Add(item.Value.Max(info => Math.Max(1, info.Content.Length)) + 1d);
+            }
+        }
+
+        rows.Add(1d);
+        return rows;
+    }
+
+    private void DrawNodes(
+        IReadOnlyDictionary<int, List<DamageTreeLayerInfo>> infos,
+        Color color,
+        double unitWidth,
+        double unitHeight,
+        IReadOnlyList<double> rows,
+        IReadOnlyList<double> rowTops)
+    {
+        foreach (KeyValuePair<int, List<DamageTreeLayerInfo>> item in infos.OrderBy(item => item.Key))
+        {
+            foreach (DamageTreeLayerInfo info in item.Value)
+            {
+                bool isRootLayer = item.Key == 1;
+                int nodeRow = isRootLayer ? 1 : item.Key * 3 - 2;
+                if (nodeRow < 0 || nodeRow >= rows.Count)
+                {
+                    continue;
+                }
+
+                double nodeWidth = isRootLayer ? (info.Content.Length + 2d) * unitWidth : unitWidth;
+                double nodeHeight = rows[nodeRow] * unitHeight;
+                double centerX = GetNodeCenterX(info.Center, unitWidth);
+                EventRectangle rectangle = new()
+                {
+                    Color = color,
+                    Type = info.HaveUp ? (info.NextCount > 0 ? EventType.Middle : EventType.End) : EventType.Top,
+                    Script = info.Content,
+                    Vertical = !isRootLayer,
+                    Width = nodeWidth,
+                    Height = nodeHeight
+                };
+                Children.Add(rectangle);
+                SetLeft(rectangle, centerX - nodeWidth / 2d);
+                SetTop(rectangle, rowTops[nodeRow]);
+
+                if (info.NextCount <= 0)
+                {
+                    continue;
+                }
+
+                int gateRow = isRootLayer ? 2 : item.Key * 3 - 1;
+                if (gateRow < 0 || gateRow >= rows.Count)
+                {
+                    continue;
+                }
+
+                GateIcon icon = new()
+                {
+                    Color = color,
+                    Type = info.NextCount < 2 ? -1 : info.Type,
+                    Rate = info.Ratio,
+                    Width = unitWidth,
+                    Height = rows[gateRow] * unitHeight
+                };
+                Children.Add(icon);
+                SetLeft(icon, centerX - unitWidth / 2d);
+                SetTop(icon, rowTops[gateRow]);
+            }
         }
     }
 
-    private static void DrawNodeRecursive(DrawingContext drawingContext, LayoutNode layout)
+    private void DrawLines(
+        IReadOnlyDictionary<int, List<DamageTreeLayerLineInfo>> lineInfos,
+        Color color,
+        double unitWidth,
+        double unitHeight,
+        IReadOnlyList<double> rows,
+        IReadOnlyList<double> rowTops)
     {
-        Rect nodeRect = layout.NodeRect;
-        drawingContext.DrawRectangle(s_nodeBrush, s_boxPen, nodeRect);
+        foreach (KeyValuePair<int, List<DamageTreeLayerLineInfo>> item in lineInfos.OrderBy(item => item.Key))
+        {
+            foreach (DamageTreeLayerLineInfo info in item.Value)
+            {
+                int row = item.Key * 3;
+                if (row < 0 || row >= rows.Count)
+                {
+                    continue;
+                }
 
-        string nodeName = string.IsNullOrWhiteSpace(layout.Node.NodeName) ? "未命名" : layout.Node.NodeName.Trim();
-        if (layout.Depth == 0)
-        {
-            DrawCenteredText(drawingContext, nodeName, nodeRect, s_textBrush, 15d, FontWeights.Bold);
-        }
-        else
-        {
-            DrawCenteredText(drawingContext, ToVerticalText(nodeName), nodeRect, s_textBrush, 15d, FontWeights.SemiBold);
-        }
-
-        foreach (LayoutNode child in layout.Children)
-        {
-            DrawNodeRecursive(drawingContext, child);
+                double left = GetNodeCenterX(info.Start, unitWidth);
+                ConnectLine line = new()
+                {
+                    Color = color,
+                    Unit = info.Unit,
+                    ParentOffset = (info.ParentCenter - info.Start) / Math.Max(1d, info.Unit),
+                    Outs = info.Outs.ToArray(),
+                    Width = Math.Max(unitWidth, info.Unit * 2d * unitWidth),
+                    Height = rows[row] * unitHeight
+                };
+                Children.Add(line);
+                SetLeft(line, left);
+                SetTop(line, rowTops[row]);
+            }
         }
     }
 
-    private void DrawEmptyText(DrawingContext drawingContext)
+    private static double[] BuildRowTops(IReadOnlyList<double> rows, double unitHeight)
     {
-        Rect bounds = new(0d, 0d, Math.Max(RenderSize.Width, 420d), Math.Max(RenderSize.Height, 260d));
-        DrawCenteredText(drawingContext, "当前毁伤树暂无节点", bounds, s_emptyTextBrush, 16d, FontWeights.SemiBold);
+        double[] rowTops = new double[rows.Count];
+        double currentTop = 0d;
+        for (int index = 0; index < rows.Count; index++)
+        {
+            rowTops[index] = currentTop;
+            currentTop += rows[index] * unitHeight;
+        }
+
+        return rowTops;
     }
 
-    private static string GetGateText(DamageTreeNodeItem node)
+    private static double GetNodeCenterX(double center, double unitWidth) => (2d * center + 1d) * unitWidth;
+
+    private static BitmapEncoder CreateBitmapEncoder(string fileName)
     {
-        return node.RelationType switch
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
         {
-            DamageNodeRelationType.And => "+",
-            DamageNodeRelationType.Or => "或",
-            DamageNodeRelationType.Vote => node.VoteThreshold.ToString("0.###", CultureInfo.CurrentCulture),
-            _ => "-"
+            ".jpg" or ".jpeg" => new JpegBitmapEncoder { QualityLevel = 95 },
+            ".bmp" => new BmpBitmapEncoder(),
+            ".tif" or ".tiff" => new TiffBitmapEncoder(),
+            _ => new PngBitmapEncoder()
         };
-    }
-
-    private static string ToVerticalText(string text)
-    {
-        return string.Join(Environment.NewLine, text.Where(ch => !char.IsWhiteSpace(ch)));
-    }
-
-    private static void DrawCenteredText(DrawingContext drawingContext, string text, Rect bounds, Brush brush, double fontSize, FontWeight fontWeight)
-    {
-        double pixelsPerDip = Application.Current?.MainWindow is Visual visual
-            ? VisualTreeHelper.GetDpi(visual).PixelsPerDip
-            : 1d;
-
-        FormattedText formattedText = new(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Microsoft YaHei"), FontStyles.Normal, fontWeight, FontStretches.Normal),
-            fontSize,
-            brush,
-            pixelsPerDip)
-        {
-            TextAlignment = TextAlignment.Center,
-            MaxTextWidth = Math.Max(1d, bounds.Width - 6d),
-            MaxTextHeight = Math.Max(1d, bounds.Height - 4d),
-            Trimming = TextTrimming.CharacterEllipsis
-        };
-
-        Point origin = new(bounds.Left + (bounds.Width - formattedText.Width) / 2d, bounds.Top + (bounds.Height - formattedText.Height) / 2d);
-        drawingContext.DrawText(formattedText, origin);
-    }
-
-    private sealed class LayoutNode
-    {
-        public LayoutNode(DamageTreeNodeItem node, int depth, double width, double height)
-        {
-            Node = node;
-            Depth = depth;
-            Width = width;
-            Height = height;
-        }
-
-        public DamageTreeNodeItem Node { get; }
-
-        public int Depth { get; }
-
-        public double Width { get; }
-
-        public double Height { get; }
-
-        public double CenterX { get; set; }
-
-        public double Top { get; set; }
-
-        public List<LayoutNode> Children { get; } = new();
-
-        public Rect NodeRect => new(CenterX - Width / 2d, Top, Width, Height);
-
-        public Point TopCenter => new(CenterX, Top);
-
-        public Point BottomCenter => new(CenterX, Top + Height);
-    }
-
-    private readonly record struct GraphBounds(double Left, double Top, double Right, double Bottom)
-    {
-        public static GraphBounds Empty => new(double.PositiveInfinity, double.PositiveInfinity, double.NegativeInfinity, double.NegativeInfinity);
-
-        public static GraphBounds FromRect(Rect rect) => new(rect.Left, rect.Top, rect.Right, rect.Bottom);
-
-        public GraphBounds Include(GraphBounds other)
-        {
-            if (double.IsPositiveInfinity(Left))
-            {
-                return other;
-            }
-
-            if (double.IsPositiveInfinity(other.Left))
-            {
-                return this;
-            }
-
-            return new GraphBounds(
-                Math.Min(Left, other.Left),
-                Math.Min(Top, other.Top),
-                Math.Max(Right, other.Right),
-                Math.Max(Bottom, other.Bottom));
-        }
-
-        public GraphBounds Include(Rect rect) => Include(FromRect(rect));
-
-        public GraphBounds Include(Point point)
-        {
-            GraphBounds pointBounds = new(point.X, point.Y, point.X, point.Y);
-            return Include(pointBounds);
-        }
     }
 }
