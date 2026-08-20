@@ -1,5 +1,4 @@
 using CombatSimulation.Models;
-using CombatSimulation.Services.MySql;
 using CombatSimulation.Services.Targets;
 using CombatSimulation.Services.Unity;
 using System.Diagnostics;

@@ -1,5 +1,4 @@
 ﻿using CombatSimulation.Models;
-using CombatSimulation.Services.MySql;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 
@@ -102,7 +101,6 @@ public sealed partial class TargetInfoViewModel
             }
 
             StatusText = $"读取毁伤树失败：{ex.Message}";
-            MySqlLog.LogWarning($"读取毁伤树失败：{ex}");
             Debug.WriteLine($"[TargetInfoViewModel] 读取毁伤树失败：{ex}");
         }
         finally

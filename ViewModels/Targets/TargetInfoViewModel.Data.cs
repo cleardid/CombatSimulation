@@ -1,5 +1,4 @@
 ﻿using CombatSimulation.Models;
-using CombatSimulation.Services.MySql;
 using System.Diagnostics;
 
 namespace CombatSimulation.ViewModels;
@@ -50,13 +49,11 @@ public sealed partial class TargetInfoViewModel
                 ? "数据库中暂无目标信息"
                 : $"已从数据库读取 {Targets.Count} 个目标";
             StatusText = _targetLoadStatusText;
-            MySqlLog.Log(_targetLoadStatusText);
         }
         catch (Exception ex)
         {
             _targetLoadStatusText = $"读取目标数据库失败：{ex.Message}";
             StatusText = _targetLoadStatusText;
-            MySqlLog.LogWarning($"读取目标数据库失败：{ex}");
             Debug.WriteLine($"[TargetInfoViewModel] 读取目标数据库失败：{ex}");
         }
         finally
