@@ -25,15 +25,10 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
 
     private readonly ITargetInfoRepository _targetInfoRepository;
     private readonly IDamageTreeRepository _damageTreeRepository;
-    private readonly IUnityCommandService _unityCommandService;
     private readonly ITargetInteractionService _interactionService;
-    private readonly bool _ownsUnityCommandService;
+    private readonly TargetUnitySyncCoordinator _unitySyncCoordinator;
     private bool _disposed;
     private TargetInfoItem? _checkStateSubscriptionTarget;
-    private CancellationTokenSource? _targetSelectionCts;
-    private CancellationTokenSource? _partHighlightCts;
-    private CancellationTokenSource? _checkedPartSyncCts;
-    private CancellationTokenSource? _databaseSnapshotSyncCts;
     private CancellationTokenSource? _damageTreeLoadCts;
     private readonly SemaphoreSlim _repositoryOperationLock = new(1, 1);
     private readonly object _initializationSync = new();
@@ -92,11 +87,15 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     {
         _targetInfoRepository = targetInfoRepository ?? throw new ArgumentNullException(nameof(targetInfoRepository));
         _damageTreeRepository = damageTreeRepository ?? throw new ArgumentNullException(nameof(damageTreeRepository));
-        _unityCommandService = unityCommandService ?? throw new ArgumentNullException(nameof(unityCommandService));
         _interactionService = interactionService ?? throw new ArgumentNullException(nameof(interactionService));
-        _ownsUnityCommandService = ownsUnityCommandService;
+        ArgumentNullException.ThrowIfNull(unityCommandService);
+        _unitySyncCoordinator = new TargetUnitySyncCoordinator(
+            unityCommandService,
+            cancellationToken => RunRepositoryOperationAsync(_targetInfoRepository.CreateDatabaseSnapshot, cancellationToken),
+            CaptureUnityDisplayState,
+            SetStatusTextOnUiThread,
+            ownsUnityCommandService);
 
-        _unityCommandService.EventReceived += OnUnityEventReceived;
         FilteredTargets = CollectionViewSource.GetDefaultView(Targets);
         FilteredTargets.Filter = FilterTargetByCategory;
         RebuildTargetCategories(refreshFilteredTargets: false);
@@ -270,27 +269,10 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
-        _unityCommandService.EventReceived -= OnUnityEventReceived;
         DetachCheckStateHandlers(_checkStateSubscriptionTarget);
         _checkStateSubscriptionTarget = null;
-
-        _targetSelectionCts?.Cancel();
-        _targetSelectionCts?.Dispose();
-        _targetSelectionCts = null;
-
-        _partHighlightCts?.Cancel();
-        _partHighlightCts?.Dispose();
-        _partHighlightCts = null;
-
-        // 这三个来源由对应后台任务在 finally 中释放；这里只发出取消信号。
-        _checkedPartSyncCts?.Cancel();
-        _databaseSnapshotSyncCts?.Cancel();
         _damageTreeLoadCts?.Cancel();
-
-        if (_ownsUnityCommandService && _unityCommandService is IDisposable disposableService)
-        {
-            disposableService.Dispose();
-        }
+        _unitySyncCoordinator.Dispose();
 
         GC.SuppressFinalize(this);
     }

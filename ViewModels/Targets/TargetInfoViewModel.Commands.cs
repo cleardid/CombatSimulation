@@ -18,9 +18,7 @@ public sealed partial class TargetInfoViewModel
             LoadDamageTreesForSelectedTarget();
         }
 
-        _targetSelectionCts?.Cancel();
-        _targetSelectionCts = new CancellationTokenSource();
-        RunUnityCommandInBackground(token => SendSelectedTargetToUnityAsync(value, token), _targetSelectionCts.Token);
+        _unitySyncCoordinator.ShowTarget(value?.Code);
         SelectedStructureNode = FindPreferredStructureNode(value);
     }
 
@@ -28,12 +26,8 @@ public sealed partial class TargetInfoViewModel
     {
         SynchronizeStructureNodeSelection(value);
         RefreshSelectedDetailRows(value);
-        _partHighlightCts?.Cancel();
-        if (value?.Part != null)
-        {
-            _partHighlightCts = new CancellationTokenSource();
-            RunUnityCommandInBackground(token => SendHighlightedPartToUnityAsync(value.Part, token), _partHighlightCts.Token);
-        }
+        _unitySyncCoordinator.HighlightPart(value?.Part?.PartCode);
+
     }
 
     partial void OnSelectedInfoPanelChanged(string value)

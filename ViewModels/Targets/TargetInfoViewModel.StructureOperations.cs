@@ -1,4 +1,4 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CombatSimulation.Services.MySql;
 using CombatSimulation.Services.Targets;
 using CombatSimulation.Services.Unity;
@@ -286,7 +286,7 @@ public sealed partial class TargetInfoViewModel
             if (ReferenceEquals(SelectedStructureNode, node))
             {
                 // 部件编码可能已变化，修改完成后重新高亮当前部件。
-                await SendHighlightedPartToUnityAsync(part).ConfigureAwait(true);
+                await _unitySyncCoordinator.HighlightPartAsync(part.PartCode).ConfigureAwait(true);
             }
 
             StatusText = $"已修改部件：{part.PartName}";
