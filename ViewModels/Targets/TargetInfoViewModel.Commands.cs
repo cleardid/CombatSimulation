@@ -178,14 +178,13 @@ public sealed partial class TargetInfoViewModel
             return;
         }
 
-        if (DamageTreeDefaults.DamageLevels.All(level =>
-                DamageTrees.Any(tree => string.Equals(DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo), level, StringComparison.Ordinal))))
+        if (_damageTreeEditor.HasAllDamageLevels(DamageTrees))
         {
             RequestOperationMessage("当前目标已存在轻度、中度、重度三棵毁伤树，不能继续添加。");
             return;
         }
 
-        DamageTreeInfoItem? edited = _interactionService.EditDamageTree(CreateDamageTreeDraft(), SelectedTarget.Name, isEditMode: false);
+        DamageTreeInfoItem? edited = _interactionService.EditDamageTree(_damageTreeEditor.CreateTreeDraft(SelectedTarget, DamageTrees), SelectedTarget.Name, isEditMode: false);
         if (edited != null)
         {
             ShowOperationFailure(await AddDamageTreeAsync(edited));
@@ -203,7 +202,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         DamageTreeInfoItem? edited = _interactionService.EditDamageTree(
-            CloneDamageTreeForEdit(tree),
+            _damageTreeEditor.CloneTreeForEdit(tree),
             SelectedTarget?.Name ?? string.Empty,
             isEditMode: true);
         if (edited != null)
@@ -239,10 +238,10 @@ public sealed partial class TargetInfoViewModel
         SelectDamageTreeNode(node);
         DamageTreeNodeItem? edited = node.IsLeafNode
             ? _interactionService.EditLeafDamageNode(
-                CloneDamageNodeForEdit(node),
+                _damageTreeEditor.CloneNodeForEdit(node),
                 SelectedTarget?.StructureTreeNodes ?? Enumerable.Empty<TargetStructureTreeNode>(),
                 isEditMode: true)
-            : _interactionService.EditMiddleDamageNode(CloneDamageNodeForEdit(node), isEditMode: true);
+            : _interactionService.EditMiddleDamageNode(_damageTreeEditor.CloneNodeForEdit(node), isEditMode: true);
         if (edited != null)
         {
             ShowOperationFailure(await UpdateDamageNodeAsync(node, edited));
@@ -277,7 +276,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         SelectDamageTreeNode(parentNode);
-        DamageTreeNodeItem? edited = _interactionService.EditMiddleDamageNode(CreateDamageMiddleNodeDraft(parentNode), isEditMode: false);
+        DamageTreeNodeItem? edited = _interactionService.EditMiddleDamageNode(_damageTreeEditor.CreateMiddleNodeDraft(parentNode), isEditMode: false);
         if (edited != null)
         {
             ShowOperationFailure(await AddDamageNodeAsync(parentNode, edited));
@@ -295,7 +294,7 @@ public sealed partial class TargetInfoViewModel
 
         SelectDamageTreeNode(parentNode);
         DamageTreeNodeItem? edited = _interactionService.EditLeafDamageNode(
-            CreateDamageLeafNodeDraft(parentNode),
+            _damageTreeEditor.CreateLeafNodeDraft(parentNode),
             SelectedTarget?.StructureTreeNodes ?? Enumerable.Empty<TargetStructureTreeNode>(),
             isEditMode: false);
         if (edited != null)

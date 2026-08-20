@@ -25,6 +25,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
 
     private readonly ITargetInfoRepository _targetInfoRepository;
     private readonly IDamageTreeRepository _damageTreeRepository;
+    private readonly DamageTreeEditor _damageTreeEditor = new();
     private readonly ITargetInteractionService _interactionService;
     private readonly TargetUnitySyncCoordinator _unitySyncCoordinator;
     private bool _disposed;

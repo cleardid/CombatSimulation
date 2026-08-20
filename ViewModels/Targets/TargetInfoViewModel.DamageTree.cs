@@ -1,4 +1,5 @@
 ﻿using CombatSimulation.Models;
+using CombatSimulation.Services.DamageTrees;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 
@@ -11,7 +12,7 @@ public sealed partial class TargetInfoViewModel
     /// </summary>
     partial void OnSelectedDamageTreeChanged(DamageTreeInfoItem? value)
     {
-        SelectedDamageTreeNode = FindPreferredDamageNode(value);
+        SelectedDamageTreeNode = _damageTreeEditor.FindPreferredNode(value);
     }
 
     /// <summary>
@@ -59,7 +60,7 @@ public sealed partial class TargetInfoViewModel
 
         try
         {
-            IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = BuildPartLookup(target);
+            IReadOnlyDictionary<string, TargetPartInfoItem> partLookup = _damageTreeEditor.BuildPartLookup(target);
             IReadOnlyList<DamageTreeInfoItem> storedTrees = await RunRepositoryOperationAsync(
                 cancellationToken => _damageTreeRepository.LoadDamageTreesAsync(target.Code, partLookup, cancellationToken),
                 loadCts.Token);
@@ -68,25 +69,13 @@ public sealed partial class TargetInfoViewModel
                 return;
             }
 
-            // 当前界面只展示轻度、中度、重度三棵功能毁伤树。
-            // 如果数据库中存在历史重复项，只保留同一毁伤等级的第一棵，避免下拉框出现多个“轻度毁伤树”。
-            int skippedTreeCount = 0;
-            HashSet<string> loadedLevels = new(StringComparer.Ordinal);
-            foreach (DamageTreeInfoItem tree in storedTrees)
+            DamageTreeLoadPreparation preparation = _damageTreeEditor.PrepareLoadedTrees(storedTrees);
+            foreach (DamageTreeInfoItem tree in preparation.Trees)
             {
-                tree.DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo);
-                tree.DamageTreeType = DamageTreeDefaults.DefaultTreeType;
-
-                if (!DamageTreeDefaults.IsKnownDamageLevel(tree.DamageLevelInfo) || !loadedLevels.Add(tree.DamageLevelInfo))
-                {
-                    skippedTreeCount++;
-                    continue;
-                }
-
                 DamageTrees.Add(tree);
             }
 
-            SelectedDamageTree = DamageTrees.FirstOrDefault();
+            int skippedTreeCount = preparation.SkippedTreeCount;            SelectedDamageTree = DamageTrees.FirstOrDefault();
             StatusText = DamageTrees.Count == 0
                 ? $"目标“{target.Name}”暂无毁伤树"
                 : skippedTreeCount == 0
@@ -111,113 +100,6 @@ public sealed partial class TargetInfoViewModel
             }
             loadCts.Dispose();
         }
-    }
-
-    /// <summary>
-    /// 创建新增毁伤树弹窗使用的草稿。
-    /// </summary>
-    public DamageTreeInfoItem CreateDamageTreeDraft()
-    {
-        string treeCode = Guid.NewGuid().ToString("N");
-        string rootNodeCode = Guid.NewGuid().ToString("N");
-        string targetName = SelectedTarget?.Name ?? "目标";
-        string damageLevel = DamageTreeDefaults.FindFirstAvailableDamageLevel(DamageTrees);
-
-        DamageTreeInfoItem tree = new()
-        {
-            DamageTreeCode = treeCode,
-            DamageTreeName = DamageTreeDefaults.CreateDefaultTreeName(targetName, damageLevel),
-            DamageTreeDescription = string.Empty,
-            TargetCode = SelectedTarget?.Code ?? string.Empty,
-            DamageLevelInfo = damageLevel,
-            DamageTreeType = DamageTreeDefaults.DefaultTreeType
-        };
-
-        tree.RootNodes.Add(new DamageTreeNodeItem
-        {
-            NodeCode = rootNodeCode,
-            DamageTreeCode = treeCode,
-            NodeName = DamageTreeDefaults.CreateDefaultRootNodeName(targetName, damageLevel),
-            ParentNodeCode = string.Empty,
-            RelationType = DamageNodeRelationType.And,
-            VoteThreshold = 1,
-            NodeDescription = string.Empty,
-            SortOrder = 0,
-            IsExpanded = true
-        });
-
-        return tree;
-    }
-
-    /// <summary>
-    /// 创建用于编辑的毁伤树浅拷贝。
-    /// </summary>
-    private static DamageTreeInfoItem CloneDamageTreeForEdit(DamageTreeInfoItem source)
-    {
-        DamageTreeInfoItem clone = new()
-        {
-            DamageTreeCode = source.DamageTreeCode,
-            DamageTreeName = source.DamageTreeName,
-            DamageTreeDescription = source.DamageTreeDescription,
-            TargetCode = source.TargetCode,
-            DamageLevelInfo = source.DamageLevelInfo,
-            DamageTreeType = source.DamageTreeType
-        };
-
-        foreach (DamageTreeNodeItem rootNode in source.RootNodes)
-        {
-            clone.RootNodes.Add(rootNode.CloneShallow());
-        }
-
-        return clone;
-    }
-
-    /// <summary>
-    /// 创建新增中间节点草稿。
-    /// </summary>
-    public DamageTreeNodeItem CreateDamageMiddleNodeDraft(DamageTreeNodeItem parentNode)
-    {
-        return new DamageTreeNodeItem
-        {
-            NodeCode = Guid.NewGuid().ToString("N"),
-            DamageTreeCode = parentNode.DamageTreeCode,
-            NodeName = "新建中间节点",
-            ParentNodeCode = parentNode.NodeCode,
-            RelationType = DamageNodeRelationType.And,
-            VoteThreshold = 1,
-            NodeDescription = string.Empty,
-            SortOrder = parentNode.Children.Count,
-            IsExpanded = true
-        };
-    }
-
-    /// <summary>
-    /// 创建新增叶子节点草稿。
-    /// </summary>
-    public DamageTreeNodeItem CreateDamageLeafNodeDraft(DamageTreeNodeItem parentNode)
-    {
-        return new DamageTreeNodeItem
-        {
-            NodeCode = Guid.NewGuid().ToString("N"),
-            DamageTreeCode = parentNode.DamageTreeCode,
-            NodeName = "新建叶子节点",
-            ParentNodeCode = parentNode.NodeCode,
-            RelationType = DamageNodeRelationType.None,
-            VoteThreshold = 1,
-            PartCode = string.Empty,
-            PartName = string.Empty,
-            NodeDescription = string.Empty,
-            SortOrder = parentNode.Children.Count,
-            IsExpanded = false
-        };
-    }
-
-    /// <summary>
-    /// 创建毁伤节点编辑草稿。
-    /// </summary>
-    private static DamageTreeNodeItem CloneDamageNodeForEdit(DamageTreeNodeItem source)
-    {
-        return source.CloneShallow();
     }
 
     /// <summary>
@@ -392,7 +274,7 @@ public sealed partial class TargetInfoViewModel
         try
         {
             await RunRepositoryOperationAsync(() => _damageTreeRepository.UpdateNodeAsync(originalNode.NodeCode, editedNode));
-            ApplyDamageNodeUpdate(originalNode, editedNode);
+            _damageTreeEditor.ApplyNodeUpdate(originalNode, editedNode);
             SelectDamageTreeNode(originalNode);
             RefreshDamageNodeDetailRows(originalNode);
             NotifyDatabaseChangedForUnity(refreshCurrentDisplayAfterSync: false);
@@ -522,202 +404,40 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 校验并规范化毁伤树草稿。
+    /// 调用领域服务规范化并校验毁伤树，将失败原因投影到界面状态。
     /// </summary>
     private bool NormalizeAndValidateDamageTree(DamageTreeInfoItem tree, DamageTreeInfoItem? except)
     {
-        if (SelectedTarget == null)
+        DamageTreeValidationResult result = _damageTreeEditor.NormalizeAndValidateTree(
+            tree,
+            SelectedTarget,
+            DamageTrees,
+            except);
+        if (!result.IsValid)
         {
-            StatusText = "请先选择目标";
-            return false;
+            StatusText = result.ErrorMessage;
         }
 
-        tree.DamageTreeCode = string.IsNullOrWhiteSpace(tree.DamageTreeCode) ? Guid.NewGuid().ToString("N") : tree.DamageTreeCode.Trim();
-        tree.TargetCode = SelectedTarget.Code;
-        tree.DamageTreeName = tree.DamageTreeName.Trim();
-        tree.DamageTreeDescription = tree.DamageTreeDescription.Trim();
-        tree.DamageLevelInfo = DamageTreeDefaults.NormalizeDamageLevel(tree.DamageLevelInfo);
-        // 毁伤树类型固定为“功能毁伤”，避免历史“整体毁伤树”等旧值参与唯一性判断。
-        tree.DamageTreeType = DamageTreeDefaults.DefaultTreeType;
-
-        if (string.IsNullOrWhiteSpace(tree.DamageTreeName))
-        {
-            StatusText = "请输入毁伤树名称";
-            return false;
-        }
-
-        if (!DamageTreeDefaults.IsKnownDamageLevel(tree.DamageLevelInfo))
-        {
-            StatusText = "毁伤树只能选择轻度毁伤、中度毁伤或重度毁伤";
-            return false;
-        }
-
-        if (tree.RootNodes.Count == 0)
-        {
-            tree.RootNodes.Add(new DamageTreeNodeItem
-            {
-                NodeCode = Guid.NewGuid().ToString("N"),
-                DamageTreeCode = tree.DamageTreeCode,
-                NodeName = tree.DamageTreeName,
-                ParentNodeCode = string.Empty,
-                RelationType = DamageNodeRelationType.And,
-                VoteThreshold = 1,
-                SortOrder = 0,
-                IsExpanded = true
-            });
-        }
-
-        DamageTreeNodeItem root = tree.RootNodes[0];
-        root.DamageTreeCode = tree.DamageTreeCode;
-        root.ParentNodeCode = string.Empty;
-        root.NodeCode = string.IsNullOrWhiteSpace(root.NodeCode) ? Guid.NewGuid().ToString("N") : root.NodeCode.Trim();
-        root.NodeName = string.IsNullOrWhiteSpace(root.NodeName) ? tree.DamageTreeName : root.NodeName.Trim();
-        if (root.IsLeafNode)
-        {
-            root.RelationType = DamageNodeRelationType.And;
-        }
-
-        bool codeUsed = DamageTrees.Any(existingTree =>
-            !ReferenceEquals(existingTree, except) &&
-            string.Equals(existingTree.DamageTreeCode, tree.DamageTreeCode, StringComparison.Ordinal));
-        if (codeUsed)
-        {
-            StatusText = $"毁伤树唯一标识已存在：{tree.DamageTreeCode}";
-            return false;
-        }
-
-        bool damageLevelUsed = DamageTrees.Any(existingTree =>
-            !ReferenceEquals(existingTree, except) &&
-            string.Equals(DamageTreeDefaults.NormalizeDamageLevel(existingTree.DamageLevelInfo), tree.DamageLevelInfo, StringComparison.Ordinal));
-        if (damageLevelUsed)
-        {
-            StatusText = $"当前目标已经存在{tree.DamageLevelInfo}树，轻度、中度、重度各只能保留一棵";
-            return false;
-        }
-
-        return true;
+        return result.IsValid;
     }
 
     /// <summary>
-    /// 校验并规范化毁伤节点草稿。
+    /// 调用领域服务规范化并校验毁伤节点，将失败原因投影到界面状态。
     /// </summary>
     private bool NormalizeAndValidateDamageNode(DamageTreeNodeItem node, DamageTreeNodeItem? except)
     {
-        node.NodeCode = string.IsNullOrWhiteSpace(node.NodeCode) ? Guid.NewGuid().ToString("N") : node.NodeCode.Trim();
-        node.NodeName = node.NodeName.Trim();
-        node.NodeDescription = node.NodeDescription.Trim();
-        node.PartCode = node.PartCode.Trim();
-        node.PartName = node.PartName.Trim();
-        node.VoteThreshold = Math.Max(1f, node.VoteThreshold);
-
-        if (string.IsNullOrWhiteSpace(node.NodeName))
+        DamageTreeValidationResult result = _damageTreeEditor.NormalizeAndValidateNode(
+            node,
+            SelectedDamageTree,
+            SelectedTarget,
+            except);
+        if (!result.IsValid)
         {
-            StatusText = "请输入毁伤节点名称";
-            return false;
+            StatusText = result.ErrorMessage;
         }
 
-        if (node.IsLeafNode)
-        {
-            if (string.IsNullOrWhiteSpace(node.PartCode))
-            {
-                StatusText = "叶子节点必须绑定目标部件";
-                return false;
-            }
-
-            if (!BuildPartLookup(SelectedTarget).ContainsKey(node.PartCode))
-            {
-                StatusText = "叶子节点绑定的部件不存在，请重新选择目标结构中的底层部件";
-                return false;
-            }
-        }
-        else
-        {
-            node.PartCode = string.Empty;
-            node.PartName = string.Empty;
-        }
-
-        bool codeUsed = SelectedDamageTree != null && EnumerateDamageNodes(SelectedDamageTree.RootNodes)
-            .Any(existingNode => !ReferenceEquals(existingNode, except) && string.Equals(existingNode.NodeCode, node.NodeCode, StringComparison.Ordinal));
-        if (codeUsed)
-        {
-            StatusText = $"毁伤节点唯一标识已存在：{node.NodeCode}";
-            return false;
-        }
-
-        return true;
+        return result.IsValid;
     }
-
-    /// <summary>
-    /// 将编辑草稿写回 TreeView 正在绑定的毁伤节点对象。
-    /// </summary>
-    private static void ApplyDamageNodeUpdate(DamageTreeNodeItem target, DamageTreeNodeItem source)
-    {
-        target.NodeName = source.NodeName;
-        target.RelationType = source.RelationType;
-        target.VoteThreshold = source.VoteThreshold;
-        target.PartCode = source.PartCode;
-        target.PartName = source.PartName;
-        target.NodeDescription = source.NodeDescription;
-
-        if (target.IsLeafNode)
-        {
-            target.Children.Clear();
-        }
-    }
-
-    /// <summary>
-    /// 构建当前目标的部件索引，供毁伤树叶子节点绑定校验和显示使用。
-    /// </summary>
-    private static IReadOnlyDictionary<string, TargetPartInfoItem> BuildPartLookup(TargetInfoItem? target)
-    {
-        if (target == null)
-        {
-            return new Dictionary<string, TargetPartInfoItem>(StringComparer.Ordinal);
-        }
-
-        return EnumerateSystems(target.Systems)
-            .SelectMany(system => system.Parts)
-            .Where(part => !string.IsNullOrWhiteSpace(part.PartCode))
-            .GroupBy(part => part.PartCode, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// 查找毁伤树默认选中的节点。
-    /// </summary>
-    private static DamageTreeNodeItem? FindPreferredDamageNode(DamageTreeInfoItem? tree)
-    {
-        if (tree == null)
-        {
-            return null;
-        }
-
-        return FindDamageNode(tree.RootNodes, node => node.IsSelected)
-               ?? tree.RootNodes.FirstOrDefault();
-    }
-
-    /// <summary>
-    /// 在毁伤树中查找满足条件的第一个节点。
-    /// </summary>
-    private static DamageTreeNodeItem? FindDamageNode(IEnumerable<DamageTreeNodeItem> nodes, Func<DamageTreeNodeItem, bool> predicate)
-    {
-        foreach (DamageTreeNodeItem node in nodes)
-        {
-            if (predicate(node))
-            {
-                return node;
-            }
-
-            DamageTreeNodeItem? child = FindDamageNode(node.Children, predicate);
-            if (child != null)
-            {
-                return child;
-            }
-        }
-
-        return null;
-    }
-
     /// <summary>
     /// 清空毁伤树节点选中状态。
     /// </summary>
@@ -727,22 +447,6 @@ public sealed partial class TargetInfoViewModel
         {
             node.IsSelected = false;
             ClearDamageNodeSelection(node.Children);
-        }
-    }
-
-    /// <summary>
-    /// 深度优先遍历毁伤树节点。
-    /// </summary>
-    private static IEnumerable<DamageTreeNodeItem> EnumerateDamageNodes(IEnumerable<DamageTreeNodeItem> nodes)
-    {
-        foreach (DamageTreeNodeItem node in nodes)
-        {
-            yield return node;
-
-            foreach (DamageTreeNodeItem child in EnumerateDamageNodes(node.Children))
-            {
-                yield return child;
-            }
         }
     }
 }
