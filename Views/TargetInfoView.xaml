@@ -1,14 +1,9 @@
 <UserControl x:Class="CombatSimulation.Views.TargetInfoView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:viewModels="clr-namespace:CombatSimulation.ViewModels"
              xmlns:views="clr-namespace:CombatSimulation.Views"
              MinWidth="800"
              MinHeight="500">
-
-    <UserControl.DataContext>
-        <viewModels:TargetInfoViewModel />
-    </UserControl.DataContext>
 
     <UserControl.Resources>
         <ResourceDictionary Source="../Resources/Styles/TargetInfoViewStyles.xaml" />

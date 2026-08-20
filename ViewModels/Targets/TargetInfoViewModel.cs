@@ -1,4 +1,4 @@
-﻿using CombatSimulation.Models;
+using CombatSimulation.Models;
 using CombatSimulation.Services.DamageTrees;
 using CombatSimulation.Services.Targets;
 using CombatSimulation.Services.Unity;
@@ -26,6 +26,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     private readonly ITargetInfoRepository _targetInfoRepository;
     private readonly IDamageTreeRepository _damageTreeRepository;
     private readonly IUnityCommandService _unityCommandService;
+    private readonly ITargetInteractionService _interactionService;
     private readonly bool _ownsUnityCommandService;
     private bool _disposed;
     private TargetInfoItem? _checkStateSubscriptionTarget;
@@ -40,32 +41,45 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     private Task? _initializationTask;
 
     /// <summary>
-    /// 默认构造函数。
+    /// 默认构造函数。无界面宿主时使用空交互实现，适合设计器和非交互场景。
     /// </summary>
-    /// <remarks>
-    /// 生产运行时直接创建 MySQL 仓储和 Unity 命令服务；测试时可使用另一个构造函数注入替代对象。
-    /// </remarks>
     public TargetInfoViewModel()
-        : this(new MySqlTargetInfoRepository(), new MySqlDamageTreeRepository(), new UnityCommandService(UnityService.Instance), ownsUnityCommandService: true)
+        : this(NullTargetInteractionService.Instance)
     {
     }
 
     /// <summary>
-    /// 支持替换 MySQL 仓储和 Unity 命令服务的构造函数，便于显式传入连接配置或进行界面测试。
+    /// 生产界面构造函数，由 View 注入 WPF 交互服务；运行时依赖在这里统一创建并由 ViewModel 释放。
     /// </summary>
+    public TargetInfoViewModel(ITargetInteractionService interactionService)
+        : this(
+            new MySqlTargetInfoRepository(),
+            new MySqlDamageTreeRepository(),
+            new UnityCommandService(UnityService.Instance),
+            interactionService,
+            ownsUnityCommandService: true)
+    {
+    }
+
     public TargetInfoViewModel(ITargetInfoRepository targetInfoRepository, IUnityCommandService unityCommandService)
         : this(targetInfoRepository, new MySqlDamageTreeRepository(), unityCommandService)
     {
     }
 
-    /// <summary>
-    /// 支持替换目标仓储、毁伤树仓储和 Unity 命令服务的构造函数。
-    /// </summary>
     public TargetInfoViewModel(
         ITargetInfoRepository targetInfoRepository,
         IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService)
-        : this(targetInfoRepository, damageTreeRepository, unityCommandService, ownsUnityCommandService: false)
+        : this(targetInfoRepository, damageTreeRepository, unityCommandService, NullTargetInteractionService.Instance)
+    {
+    }
+
+    public TargetInfoViewModel(
+        ITargetInfoRepository targetInfoRepository,
+        IDamageTreeRepository damageTreeRepository,
+        IUnityCommandService unityCommandService,
+        ITargetInteractionService interactionService)
+        : this(targetInfoRepository, damageTreeRepository, unityCommandService, interactionService, ownsUnityCommandService: false)
     {
     }
 
@@ -73,26 +87,22 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
         ITargetInfoRepository targetInfoRepository,
         IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService,
+        ITargetInteractionService interactionService,
         bool ownsUnityCommandService)
     {
         _targetInfoRepository = targetInfoRepository ?? throw new ArgumentNullException(nameof(targetInfoRepository));
         _damageTreeRepository = damageTreeRepository ?? throw new ArgumentNullException(nameof(damageTreeRepository));
         _unityCommandService = unityCommandService ?? throw new ArgumentNullException(nameof(unityCommandService));
+        _interactionService = interactionService ?? throw new ArgumentNullException(nameof(interactionService));
         _ownsUnityCommandService = ownsUnityCommandService;
 
-        // 先订阅 Unity 事件，避免初始化数据库期间错过 Unity 的 server_ready 通知。
         _unityCommandService.EventReceived += OnUnityEventReceived;
-
-        // 使用 WPF 集合视图筛选目标，不重建原始目标集合，避免选中项和树节点引用失效。
         FilteredTargets = CollectionViewSource.GetDefaultView(Targets);
         FilteredTargets.Filter = FilterTargetByCategory;
-
-        // 构造函数只建立界面状态，不访问数据库；视图 Loaded 后显式异步初始化。
         RebuildTargetCategories(refreshFilteredTargets: false);
         RefreshSelectedDetailRows(null);
         SelectedInfoPanel = StructureInfoPanel;
     }
-
     /// <summary>
     /// 在界面加载后异步读取数据库。重复调用会复用同一个初始化任务。
     /// </summary>
@@ -156,66 +166,6 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     /// 右侧详情面板的旋转角度信息行。
     /// </summary>
     public ObservableCollection<TargetDetailRow> SelectedAngleDetailRows { get; } = new();
-
-    /// <summary>
-    /// 请求 View 显示操作提示。
-    /// </summary>
-    public event EventHandler<OperationMessageRequestedEventArgs>? OperationMessageRequested;
-
-    /// <summary>
-    /// 请求 View 打开目标添加/修改弹窗。
-    /// </summary>
-    public event EventHandler<TargetEditRequestedEventArgs>? TargetEditRequested;
-
-    /// <summary>
-    /// 请求 View 确认删除目标。
-    /// </summary>
-    public event EventHandler<TargetDeleteRequestedEventArgs>? TargetDeleteRequested;
-
-    /// <summary>
-    /// 请求 View 打开结构节点修改弹窗。
-    /// </summary>
-    public event EventHandler<StructureNodeEditRequestedEventArgs>? StructureNodeEditRequested;
-
-    /// <summary>
-    /// 请求 View 确认删除结构节点。
-    /// </summary>
-    public event EventHandler<StructureNodeDeleteRequestedEventArgs>? StructureNodeDeleteRequested;
-
-    /// <summary>
-    /// 请求 View 打开子系统添加弹窗。
-    /// </summary>
-    public event EventHandler<StructureChildSystemAddRequestedEventArgs>? StructureChildSystemAddRequested;
-
-    /// <summary>
-    /// 请求 View 打开底层部件添加弹窗。
-    /// </summary>
-    public event EventHandler<StructureChildPartAddRequestedEventArgs>? StructureChildPartAddRequested;
-
-    /// <summary>
-    /// 请求 View 打开毁伤树添加/修改弹窗。
-    /// </summary>
-    public event EventHandler<DamageTreeEditRequestedEventArgs>? DamageTreeEditRequested;
-
-    /// <summary>
-    /// 请求 View 确认删除毁伤树。
-    /// </summary>
-    public event EventHandler<DamageTreeDeleteRequestedEventArgs>? DamageTreeDeleteRequested;
-
-    /// <summary>
-    /// 请求 View 打开毁伤树中间节点添加/修改弹窗。
-    /// </summary>
-    public event EventHandler<DamageTreeMiddleNodeEditRequestedEventArgs>? DamageTreeMiddleNodeEditRequested;
-
-    /// <summary>
-    /// 请求 View 打开毁伤树叶子节点添加/修改弹窗。
-    /// </summary>
-    public event EventHandler<DamageTreeLeafNodeEditRequestedEventArgs>? DamageTreeLeafNodeEditRequested;
-
-    /// <summary>
-    /// 请求 View 确认删除毁伤树节点。
-    /// </summary>
-    public event EventHandler<DamageTreeNodeDeleteRequestedEventArgs>? DamageTreeNodeDeleteRequested;
 
     /// <summary>
     /// 选中的目标类型。
