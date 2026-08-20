@@ -1,5 +1,4 @@
 using CombatSimulation.Models.Unity;
-using CombatSimulation.Services.MySql;
 
 namespace CombatSimulation.Services.Unity;
 
@@ -54,14 +53,6 @@ public sealed class UnityCommandService : IUnityCommandService, IDisposable
         return SendEventAsync(UnityCommandNames.ShowParts, partCodes.ToList(), cancellationToken);
     }
 
-    /// <summary>
-    /// 修改目标中的单个部件。
-    /// </summary>
-    public Task UpdateTargetPartAsync(Target_Part_Info_By_MySQL part, CancellationToken cancellationToken = default)
-    {
-        // 修改目标会改变 Unity 场景数据，因此使用 request，必须检查 Unity 返回结果。
-        return SendRequestAsync(UnityCommandNames.UpdateTarget, part, cancellationToken);
-    }
 
     /// <summary>
     /// 向 Unity 推送数据库快照。

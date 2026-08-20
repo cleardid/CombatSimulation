@@ -30,11 +30,6 @@ public static class UnityCommandNames
     public const string ShowParts = "show_parts";
 
     /// <summary>
-    /// 修改目标中的单个部件。data 为 Target_Part_Info_By_MySQL。
-    /// </summary>
-    public const string UpdateTarget = "update_target";
-
-    /// <summary>
     /// 加载数据库快照。data 为 CombatDatabaseSnapshot。
     /// WPF 在 Unity 上报 server_ready 后以及数据库发生结构性变化后发送该命令。
     /// </summary>

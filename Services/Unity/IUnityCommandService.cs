@@ -1,5 +1,4 @@
 using CombatSimulation.Models.Unity;
-using CombatSimulation.Services.MySql;
 
 namespace CombatSimulation.Services.Unity;
 
@@ -38,12 +37,6 @@ public interface IUnityCommandService
     /// data 为部件唯一标识列表。
     /// </summary>
     Task ShowPartsAsync(IReadOnlyList<string> partCodes, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 通知 Unity 修改目标中的单个部件。
-    /// data 使用数据库部件结构，保证 WPF、MySQL 和 Unity 三端字段语义一致。
-    /// </summary>
-    Task UpdateTargetPartAsync(Target_Part_Info_By_MySQL part, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 向 Unity 推送当前 MySQL 数据库快照。

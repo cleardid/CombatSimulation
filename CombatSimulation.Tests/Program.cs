@@ -4,7 +4,7 @@ using CombatSimulation.Services.DamageTrees;
 using CombatSimulation.Services.Targets;
 using CombatSimulation.Services.Unity;
 using CombatSimulation.ViewModels;
-using CombatSimulation.Services.MySql;
+using Newtonsoft.Json;
 
 namespace CombatSimulation.Tests;
 
@@ -18,7 +18,8 @@ internal static class Program
             ("颜色格式统一为 Unity 数据库格式", ColorFormatIsNormalized),
             ("毁伤等级历史文本可归一化", DamageLevelIsNormalized),
             ("毁伤树默认选择第一个空缺等级", FirstAvailableDamageLevelIsSelected),
-            ("视图模型构造不访问数据库且释放事件", ViewModelConstructionAndDisposalAreSideEffectSafe)
+            ("视图模型构造不访问数据库且释放事件", ViewModelConstructionAndDisposalAreSideEffectSafe),
+            ("Unity快照使用独立协议DTO", UnitySnapshotUsesIndependentProtocolDtos)
         };
 
         int failedCount = 0;
@@ -79,6 +80,27 @@ internal static class Program
         viewModel.Dispose();
         AssertEqual(0, unityService.SubscriberCount);
         AssertEqual(0, unityService.DisposeCount);
+    }
+
+    private static void UnitySnapshotUsesIndependentProtocolDtos()
+    {
+        CombatDatabaseSnapshot snapshot = new();
+        snapshot.TargetParts.Add(new UnityTargetPartRecord
+        {
+            PartCode = "part-1",
+            PartColor = "#AABBCC0F",
+            PartEquParam24 = 24f
+        });
+
+        string json = JsonConvert.SerializeObject(snapshot);
+        if (!json.Contains("\"PartCode\":\"part-1\"", StringComparison.Ordinal)
+            || !json.Contains("\"PartColor\":\"#AABBCC0F\"", StringComparison.Ordinal)
+            || !json.Contains("\"PartEquParam24\":24.0", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Unity 快照 JSON 契约不兼容：{json}");
+        }
+
+        AssertEqual("CombatSimulation.Models.Unity", snapshot.TargetParts[0].GetType().Namespace);
     }
 
     private static void AssertEqual<T>(T expected, T actual)
@@ -150,7 +172,6 @@ internal static class Program
         public Task ShowTargetAsync(string targetCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task HighlightPartAsync(string partCode, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ShowPartsAsync(IReadOnlyList<string> partCodes, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task UpdateTargetPartAsync(Target_Part_Info_By_MySQL part, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task LoadDatabaseSnapshotAsync(CombatDatabaseSnapshot snapshot, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SendEventAsync(string command, object? data = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SendRequestAsync(string command, object? data = null, CancellationToken cancellationToken = default) => Task.CompletedTask;

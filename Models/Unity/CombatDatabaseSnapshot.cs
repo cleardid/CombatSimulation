@@ -1,39 +1,91 @@
-using CombatSimulation.Services.MySql;
-
 namespace CombatSimulation.Models.Unity;
 
 /// <summary>
-/// 发送给 Unity 的数据库快照。
+/// 发送给 Unity 的数据库快照协议。DTO 只描述 JSON 契约，不依赖 MySQL 实体或映射特性。
 /// </summary>
-/// <remarks>
-/// Unity 只把该对象作为运行期只读缓存使用；数据库写入仍由 WPF 完成。
-/// 属性名称需要与 Unity 端 SceneControl.Data.CombatDatabaseSnapshot 保持一致，
-/// 这样 JSON 反序列化时才能直接映射到 Unity 侧的表缓存结构。
-/// </remarks>
 public sealed class CombatDatabaseSnapshot
 {
-    /// <summary>
-    /// 目标主表记录集合，对应 t_t_info。
-    /// </summary>
-    public List<Target_Info_By_MySQL> Targets { get; } = new();
+    public List<UnityTargetRecord> Targets { get; } = new();
+    public List<UnityTargetSystemRecord> TargetSystems { get; } = new();
+    public List<UnityTargetPartRecord> TargetParts { get; } = new();
+    public List<UnityDamageTreeRecord> DamageTrees { get; } = new();
+    public List<UnityDamageNodeRecord> DamageNodes { get; } = new();
+}
 
-    /// <summary>
-    /// 目标系统表记录集合，对应 t_t_system。
-    /// </summary>
-    public List<Target_System_Info_By_MySQL> TargetSystems { get; } = new();
+public sealed class UnityTargetRecord
+{
+    public string TargetCode { get; set; } = string.Empty;
+    public string TargetName { get; set; } = string.Empty;
+    public string TargetCategory { get; set; } = string.Empty;
+    public string TargetDescription { get; set; } = string.Empty;
+}
 
-    /// <summary>
-    /// 目标部件表记录集合，对应 t_t_part。
-    /// </summary>
-    public List<Target_Part_Info_By_MySQL> TargetParts { get; } = new();
+public sealed class UnityTargetSystemRecord
+{
+    public string SystemCode { get; set; } = string.Empty;
+    public string SystemName { get; set; } = string.Empty;
+    public string SystemDescription { get; set; } = string.Empty;
+    public bool TargetCategory { get; set; }
+    public string ParentCode { get; set; } = string.Empty;
+    public string TargetCode { get; set; } = string.Empty;
+}
 
-    /// <summary>
-    /// 毁伤树主表记录集合，对应 t_d_tree。
-    /// </summary>
-    public List<Damage_Tree_Info_By_MySQL> DamageTrees { get; } = new();
+public sealed class UnityTargetPartRecord
+{
+    public string PartCode { get; set; } = string.Empty;
+    public string PartName { get; set; } = string.Empty;
+    public string PartShape { get; set; } = string.Empty;
+    public string PartDescription { get; set; } = string.Empty;
+    public string PartMaterial { get; set; } = string.Empty;
+    public float PartVulnerableArea { get; set; }
+    public float PartEquThickness { get; set; }
+    public string PartColor { get; set; } = "#8080800F";
+    public string PartSystemCode { get; set; } = string.Empty;
+    public float PartEquParam1 { get; set; }
+    public float PartEquParam2 { get; set; }
+    public float PartEquParam3 { get; set; }
+    public float PartEquParam4 { get; set; }
+    public float PartEquParam5 { get; set; }
+    public float PartEquParam6 { get; set; }
+    public float PartEquParam7 { get; set; }
+    public float PartEquParam8 { get; set; }
+    public float PartEquParam9 { get; set; }
+    public float PartEquParam10 { get; set; }
+    public float PartEquParam11 { get; set; }
+    public float PartEquParam12 { get; set; }
+    public float PartEquParam13 { get; set; }
+    public float PartEquParam14 { get; set; }
+    public float PartEquParam15 { get; set; }
+    public float PartEquParam16 { get; set; }
+    public float PartEquParam17 { get; set; }
+    public float PartEquParam18 { get; set; }
+    public float PartEquParam19 { get; set; }
+    public float PartEquParam20 { get; set; }
+    public float PartEquParam21 { get; set; }
+    public float PartEquParam22 { get; set; }
+    public float PartEquParam23 { get; set; }
+    public float PartEquParam24 { get; set; }
+}
 
-    /// <summary>
-    /// 毁伤树节点表记录集合，对应 t_d_node。
-    /// </summary>
-    public List<Damage_Node_Info_By_MySQL> DamageNodes { get; } = new();
+public sealed class UnityDamageTreeRecord
+{
+    public string DamageTreeCode { get; set; } = string.Empty;
+    public string DamageTreeName { get; set; } = string.Empty;
+    public string DamageTreeDescription { get; set; } = string.Empty;
+    public string TargetCode { get; set; } = string.Empty;
+    public string DamageLevelInfo { get; set; } = string.Empty;
+    public string DamageTreeType { get; set; } = string.Empty;
+}
+
+public sealed class UnityDamageNodeRecord
+{
+    public string NodeCode { get; set; } = string.Empty;
+    public string DamageTreeCode { get; set; } = string.Empty;
+    public string NodeName { get; set; } = string.Empty;
+    public string ParentNodeCode { get; set; } = string.Empty;
+    public int RelationType { get; set; }
+    public float? VoteThreshold { get; set; }
+    public string PartCode { get; set; } = string.Empty;
+    public string NodeDescription { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
 }

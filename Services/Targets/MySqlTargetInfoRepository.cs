@@ -89,19 +89,11 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
             MySqlDamageTreeRepository.EnsureGuidIdentifiers(db);
 
             CombatDatabaseSnapshot snapshot = new();
-            snapshot.Targets.AddRange(db.GetTableData<Target_Info_By_MySQL>());
-            snapshot.TargetSystems.AddRange(db.GetTableData<Target_System_Info_By_MySQL>());
-
-            List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
-            foreach (Target_Part_Info_By_MySQL part in partRows)
-            {
-                // Unity 快照只接受数据库色值语义，这里统一补齐固定透明度 0F。
-                part.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(part.PartColor);
-            }
-
-            snapshot.TargetParts.AddRange(partRows);
-            snapshot.DamageTrees.AddRange(db.GetTableData<Damage_Tree_Info_By_MySQL>());
-            snapshot.DamageNodes.AddRange(db.GetTableData<Damage_Node_Info_By_MySQL>());
+            snapshot.Targets.AddRange(db.GetTableData<Target_Info_By_MySQL>().Select(ToUnityTargetRecord));
+            snapshot.TargetSystems.AddRange(db.GetTableData<Target_System_Info_By_MySQL>().Select(ToUnityTargetSystemRecord));
+            snapshot.TargetParts.AddRange(db.GetTableData<Target_Part_Info_By_MySQL>().Select(ToUnityTargetPartRecord));
+            snapshot.DamageTrees.AddRange(db.GetTableData<Damage_Tree_Info_By_MySQL>().Select(ToUnityDamageTreeRecord));
+            snapshot.DamageNodes.AddRange(db.GetTableData<Damage_Node_Info_By_MySQL>().Select(ToUnityDamageNodeRecord));
             return snapshot;
         });
     }
@@ -309,17 +301,6 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
         });
     }
 
-
-    /// <summary>
-    /// 将 WPF 部件模型转换为 MySQL 部件数据结构。
-    /// </summary>
-    /// <remarks>
-    /// Unity 修改目标命令也使用该数据结构作为 data，避免 Unity 端同时适配 WPF 模型和数据库模型两套字段。
-    /// </remarks>
-    public Target_Part_Info_By_MySQL CreatePartCommandData(TargetPartInfoItem part)
-    {
-        return ToMySqlPart(part);
-    }
 
     /// <summary>
     /// 删除目标部件。
@@ -804,6 +785,83 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
         return row;
     }
 
+    private static UnityTargetRecord ToUnityTargetRecord(Target_Info_By_MySQL row) => new()
+    {
+        TargetCode = row.TargetCode,
+        TargetName = row.TargetName,
+        TargetCategory = row.TargetCategory,
+        TargetDescription = row.TargetDescription
+    };
+
+    private static UnityTargetSystemRecord ToUnityTargetSystemRecord(Target_System_Info_By_MySQL row) => new()
+    {
+        SystemCode = row.SystemCode,
+        SystemName = row.SystemName,
+        SystemDescription = row.SystemDescription,
+        TargetCategory = row.TargetCategory,
+        ParentCode = row.ParentCode,
+        TargetCode = row.TargetCode
+    };
+
+    private static UnityTargetPartRecord ToUnityTargetPartRecord(Target_Part_Info_By_MySQL row) => new()
+    {
+        PartCode = row.PartCode,
+        PartName = row.PartName,
+        PartShape = row.PartShape,
+        PartDescription = row.PartDescription,
+        PartMaterial = row.PartMaterial,
+        PartVulnerableArea = row.PartVulnerableArea,
+        PartEquThickness = row.PartEquThickness,
+        PartColor = TargetPartColorFormat.ToUnityDatabaseColor(row.PartColor),
+        PartSystemCode = row.PartSystemCode,
+        PartEquParam1 = row.PartEquParam1,
+        PartEquParam2 = row.PartEquParam2,
+        PartEquParam3 = row.PartEquParam3,
+        PartEquParam4 = row.PartEquParam4,
+        PartEquParam5 = row.PartEquParam5,
+        PartEquParam6 = row.PartEquParam6,
+        PartEquParam7 = row.PartEquParam7,
+        PartEquParam8 = row.PartEquParam8,
+        PartEquParam9 = row.PartEquParam9,
+        PartEquParam10 = row.PartEquParam10,
+        PartEquParam11 = row.PartEquParam11,
+        PartEquParam12 = row.PartEquParam12,
+        PartEquParam13 = row.PartEquParam13,
+        PartEquParam14 = row.PartEquParam14,
+        PartEquParam15 = row.PartEquParam15,
+        PartEquParam16 = row.PartEquParam16,
+        PartEquParam17 = row.PartEquParam17,
+        PartEquParam18 = row.PartEquParam18,
+        PartEquParam19 = row.PartEquParam19,
+        PartEquParam20 = row.PartEquParam20,
+        PartEquParam21 = row.PartEquParam21,
+        PartEquParam22 = row.PartEquParam22,
+        PartEquParam23 = row.PartEquParam23,
+        PartEquParam24 = row.PartEquParam24
+    };
+
+    private static UnityDamageTreeRecord ToUnityDamageTreeRecord(Damage_Tree_Info_By_MySQL row) => new()
+    {
+        DamageTreeCode = row.DamageTreeCode,
+        DamageTreeName = row.DamageTreeName,
+        DamageTreeDescription = row.DamageTreeDescription,
+        TargetCode = row.TargetCode,
+        DamageLevelInfo = row.DamageLevelInfo,
+        DamageTreeType = row.DamageTreeType
+    };
+
+    private static UnityDamageNodeRecord ToUnityDamageNodeRecord(Damage_Node_Info_By_MySQL row) => new()
+    {
+        NodeCode = row.NodeCode,
+        DamageTreeCode = row.DamageTreeCode,
+        NodeName = row.NodeName,
+        ParentNodeCode = row.ParentNodeCode,
+        RelationType = row.RelationType,
+        VoteThreshold = row.VoteThreshold,
+        PartCode = row.PartCode,
+        NodeDescription = row.NodeDescription,
+        SortOrder = row.SortOrder
+    };
     private static float GetPartParameterValue(Target_Part_Info_By_MySQL part, int index)
     {
         return index switch
