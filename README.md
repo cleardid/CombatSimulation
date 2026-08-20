@@ -2,6 +2,8 @@
 
 CombatSimulation 是一个基于 .NET 8/WPF 的作战仿真管理端。WPF 负责目标结构和毁伤树的编辑，MySQL 是持久化数据的唯一事实来源，Unity 通过 TCP 接收数据库只读快照并负责三维显示。
 
+完整分层、对象生命周期和数据流见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
 ## 环境要求
 
 - Windows 10/11
@@ -20,7 +22,7 @@ Copy-Item target_mysql.example.json target_mysql.json
 
 `target_mysql.json` 会在构建时复制到程序输出目录。它包含数据库账号和密码，已被 `.gitignore` 排除，不应提交到 Git。
 
-程序首次连接时会创建数据库结构，并通过 `t_schema_version` 记录迁移版本。当前迁移会创建五张业务表、补齐毁伤节点排序字段及常用关联索引。结构升级应继续新增迁移版本，不要只修改模型类后依赖 `CREATE TABLE IF NOT EXISTS`。
+程序首次连接时会创建数据库结构，并通过 `t_schema_version` 记录迁移版本。当前迁移会创建五张业务表、补齐毁伤节点排序字段和常用关联索引，并在 v4 中统一旧版标识及跨表引用。结构升级应继续新增迁移版本，不要只修改模型类后依赖 `CREATE TABLE IF NOT EXISTS`。
 
 ## NuGet 还原与构建
 
@@ -76,16 +78,16 @@ dotnet build CombatSimulation.sln --no-restore
 dotnet run --project CombatSimulation.Tests/CombatSimulation.Tests.csproj --no-build --no-restore
 ```
 
-任何测试失败都会返回非零退出码，可直接接入 CI。当前覆盖颜色格式、毁伤等级规则、默认毁伤等级选择，以及 ViewModel 构造不访问数据库和事件释放行为。
+任何测试失败都会返回非零退出码，可直接接入 CI。当前 11 项测试覆盖格式规则、目标与毁伤树领域规则、ViewModel 生命周期、Unity 快照 DTO、删除异常与确认，以及弹窗消息协议。
 
 涉及真实事务、迁移和并发快照的测试仍需要独立 MySQL 测试库；不要对生产数据库执行破坏性集成测试。
 
 ## 主要目录
 
-- `Models/`：WPF、MySQL 和 Unity 消息模型
+- `Models/`：可绑定业务模型和独立 Unity 协议 DTO
 - `Services/MySql/`：连接、通用命令、事务和结构迁移
-- `Services/Targets/`：目标结构仓储
-- `Services/DamageTrees/`：毁伤树仓储
-- `Services/Unity/`：Unity TCP 命令适配
+- `Services/Targets/`：目标结构领域编辑服务、仓储端口和 MySQL 实现
+- `Services/DamageTrees/`：毁伤树领域编辑服务、仓储端口和 MySQL 实现
+- `Services/Unity/`：Unity 命令端口、同步协调、TCP、进程和窗口宿主
 - `ViewModels/Targets/`：目标页业务与同步编排
 - `CombatSimulation.Tests/`：无第三方测试框架的离线回归测试
