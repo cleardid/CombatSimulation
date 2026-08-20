@@ -12,7 +12,6 @@ internal sealed class TargetUnitySyncCoordinator : IDisposable
     private readonly Func<CancellationToken, Task<CombatDatabaseSnapshot>> _loadSnapshotAsync;
     private readonly Func<UnityDisplayState> _captureDisplayState;
     private readonly Action<string> _reportStatus;
-    private readonly bool _ownsUnityCommandService;
     private CancellationTokenSource? _targetSelectionCts;
     private CancellationTokenSource? _partHighlightCts;
     private CancellationTokenSource? _checkedPartsCts;
@@ -23,14 +22,12 @@ internal sealed class TargetUnitySyncCoordinator : IDisposable
         IUnityCommandService unityCommandService,
         Func<CancellationToken, Task<CombatDatabaseSnapshot>> loadSnapshotAsync,
         Func<UnityDisplayState> captureDisplayState,
-        Action<string> reportStatus,
-        bool ownsUnityCommandService)
+        Action<string> reportStatus)
     {
         _unityCommandService = unityCommandService ?? throw new ArgumentNullException(nameof(unityCommandService));
         _loadSnapshotAsync = loadSnapshotAsync ?? throw new ArgumentNullException(nameof(loadSnapshotAsync));
         _captureDisplayState = captureDisplayState ?? throw new ArgumentNullException(nameof(captureDisplayState));
         _reportStatus = reportStatus ?? throw new ArgumentNullException(nameof(reportStatus));
-        _ownsUnityCommandService = ownsUnityCommandService;
         _unityCommandService.EventReceived += OnUnityEventReceived;
     }
 
@@ -89,10 +86,6 @@ internal sealed class TargetUnitySyncCoordinator : IDisposable
         _checkedPartsCts = null;
         _databaseSnapshotCts = null;
 
-        if (_ownsUnityCommandService && _unityCommandService is IDisposable disposableService)
-        {
-            disposableService.Dispose();
-        }
     }
 
     private void OnUnityEventReceived(object? sender, UnityMessage message)

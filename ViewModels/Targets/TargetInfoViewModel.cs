@@ -37,37 +37,15 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     private string? _targetLoadStatusText;
     private Task? _initializationTask;
 
-    /// <summary>
-    /// 默认构造函数。无界面宿主时使用空交互实现，适合设计器和非交互场景。
-    /// </summary>
-    public TargetInfoViewModel()
-        : this(NullTargetInteractionService.Instance)
-    {
-    }
-
-    /// <summary>
-    /// 生产界面构造函数，由 View 注入 WPF 交互服务；运行时依赖在这里统一创建并由 ViewModel 释放。
-    /// </summary>
-    public TargetInfoViewModel(ITargetInteractionService interactionService)
-        : this(
-            new MySqlTargetInfoRepository(),
-            new MySqlDamageTreeRepository(),
-            new UnityCommandService(UnityService.Instance),
-            interactionService,
-            ownsUnityCommandService: true)
-    {
-    }
-
-    public TargetInfoViewModel(ITargetInfoRepository targetInfoRepository, IUnityCommandService unityCommandService)
-        : this(targetInfoRepository, new MySqlDamageTreeRepository(), unityCommandService)
-    {
-    }
-
     public TargetInfoViewModel(
         ITargetInfoRepository targetInfoRepository,
         IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService)
-        : this(targetInfoRepository, damageTreeRepository, unityCommandService, NullTargetInteractionService.Instance)
+        : this(
+            targetInfoRepository,
+            damageTreeRepository,
+            unityCommandService,
+            NullTargetInteractionService.Instance)
     {
     }
 
@@ -76,16 +54,6 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
         IDamageTreeRepository damageTreeRepository,
         IUnityCommandService unityCommandService,
         ITargetInteractionService interactionService)
-        : this(targetInfoRepository, damageTreeRepository, unityCommandService, interactionService, ownsUnityCommandService: false)
-    {
-    }
-
-    private TargetInfoViewModel(
-        ITargetInfoRepository targetInfoRepository,
-        IDamageTreeRepository damageTreeRepository,
-        IUnityCommandService unityCommandService,
-        ITargetInteractionService interactionService,
-        bool ownsUnityCommandService)
     {
         _targetInfoRepository = targetInfoRepository ?? throw new ArgumentNullException(nameof(targetInfoRepository));
         _damageTreeRepository = damageTreeRepository ?? throw new ArgumentNullException(nameof(damageTreeRepository));
@@ -93,10 +61,11 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(unityCommandService);
         _unitySyncCoordinator = new TargetUnitySyncCoordinator(
             unityCommandService,
-            cancellationToken => RunRepositoryOperationAsync(token => _targetInfoRepository.CreateDatabaseSnapshotAsync(token), cancellationToken),
+            cancellationToken => RunRepositoryOperationAsync(
+                token => _targetInfoRepository.CreateDatabaseSnapshotAsync(token),
+                cancellationToken),
             CaptureUnityDisplayState,
-            SetStatusTextOnUiThread,
-            ownsUnityCommandService);
+            SetStatusTextOnUiThread);
 
         FilteredTargets = CollectionViewSource.GetDefaultView(Targets);
         FilteredTargets.Filter = FilterTargetByCategory;
