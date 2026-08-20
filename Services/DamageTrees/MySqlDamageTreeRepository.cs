@@ -1,7 +1,5 @@
 using CombatSimulation.Models;
 using CombatSimulation.Services.MySql;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace CombatSimulation.Services.DamageTrees;
 
@@ -63,8 +61,6 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
         }
 
         using LoadAndWriteDb db = OpenDb();
-        EnsureGuidIdentifiers(db);
-
         List<Damage_Tree_Info_By_MySQL> treeRows = db.mySqlCommand_TJ.SelectByField<Damage_Tree_Info_By_MySQL>("d_t_TargetCode", targetCode);
         List<Damage_Node_Info_By_MySQL> allNodeRows = db.GetTableData<Damage_Node_Info_By_MySQL>();
 
@@ -237,58 +233,6 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
         MySqlLog.Log("开始检查并创建毁伤树信息表。 ");
         EnsureDamageTreeTables(db);
         MySqlLog.Log("毁伤树信息表检查完成：t_d_tree、t_d_node。 ");
-    }
-
-    /// <summary>
-    /// 将历史导入的整型树标识、节点标识迁移为稳定 GUID。
-    /// </summary>
-    internal static void EnsureGuidIdentifiers(LoadAndWriteDb db)
-    {
-        db.ExecuteInTransaction(() =>
-        {
-        List<Damage_Tree_Info_By_MySQL> treeRows = db.GetTableData<Damage_Tree_Info_By_MySQL>();
-        List<Damage_Node_Info_By_MySQL> nodeRows = db.GetTableData<Damage_Node_Info_By_MySQL>();
-
-        Dictionary<string, string> treeCodeMap = CreateGuidCodeMap("damage-tree", treeRows.Select(item => item.DamageTreeCode));
-        Dictionary<string, string> nodeCodeMap = CreateGuidCodeMap("damage-node", nodeRows.Select(item => item.NodeCode));
-
-        if (treeCodeMap.Count == 0 && nodeCodeMap.Count == 0)
-        {
-            return;
-        }
-
-        MySqlLog.Log($"检测到旧版非 GUID 毁伤树标识，开始迁移：毁伤树 {treeCodeMap.Count} 条，节点 {nodeCodeMap.Count} 条。 ");
-
-        foreach (Damage_Tree_Info_By_MySQL treeRow in treeRows)
-        {
-            string oldCode = NormalizeCode(treeRow.DamageTreeCode);
-            string newCode = ConvertCode(oldCode, treeCodeMap);
-            if (!string.Equals(oldCode, newCode, StringComparison.Ordinal))
-            {
-                db.mySqlCommand_TJ.DeleteByID<Damage_Tree_Info_By_MySQL>(oldCode);
-                treeRow.DamageTreeCode = newCode;
-            }
-
-            db.mySqlCommand_TJ.Insert(treeRow);
-        }
-
-        foreach (Damage_Node_Info_By_MySQL nodeRow in nodeRows)
-        {
-            string oldNodeCode = NormalizeCode(nodeRow.NodeCode);
-            string newNodeCode = ConvertCode(oldNodeCode, nodeCodeMap);
-            if (!string.Equals(oldNodeCode, newNodeCode, StringComparison.Ordinal))
-            {
-                db.mySqlCommand_TJ.DeleteByID<Damage_Node_Info_By_MySQL>(oldNodeCode);
-                nodeRow.NodeCode = newNodeCode;
-            }
-
-            nodeRow.DamageTreeCode = ConvertCode(nodeRow.DamageTreeCode, treeCodeMap);
-            nodeRow.ParentNodeCode = ConvertReferenceCode(nodeRow.ParentNodeCode, nodeCodeMap);
-            db.mySqlCommand_TJ.Insert(nodeRow);
-        }
-
-        MySqlLog.Log("旧版非 GUID 毁伤树标识迁移完成。 ");
-        });
     }
 
     private static IReadOnlyList<DamageTreeInfoItem> BuildDamageTrees(
@@ -487,51 +431,5 @@ public sealed class MySqlDamageTreeRepository : IDamageTreeRepository
                 yield return child;
             }
         }
-    }
-
-    private static Dictionary<string, string> CreateGuidCodeMap(string scope, IEnumerable<string?> codes)
-    {
-        Dictionary<string, string> result = new(StringComparer.Ordinal);
-        foreach (string? rawCode in codes)
-        {
-            string code = NormalizeCode(rawCode);
-            if (string.IsNullOrWhiteSpace(code) || Guid.TryParse(code, out _) || result.ContainsKey(code))
-            {
-                continue;
-            }
-
-            result.Add(code, CreateDeterministicGuid(scope, code));
-        }
-
-        return result;
-    }
-
-    private static string ConvertCode(string? rawCode, IReadOnlyDictionary<string, string> codeMap)
-    {
-        string code = NormalizeCode(rawCode);
-        return codeMap.TryGetValue(code, out string? convertedCode) ? convertedCode : code;
-    }
-
-    private static string ConvertReferenceCode(string? rawCode, IReadOnlyDictionary<string, string> codeMap)
-    {
-        string code = NormalizeCode(rawCode);
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return string.Empty;
-        }
-
-        return codeMap.TryGetValue(code, out string? convertedCode) ? convertedCode : code;
-    }
-
-    private static string NormalizeCode(string? code)
-    {
-        return code?.Trim() ?? string.Empty;
-    }
-
-    private static string CreateDeterministicGuid(string scope, string legacyCode)
-    {
-        using MD5 md5 = MD5.Create();
-        byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes($"CombatSimulation:{scope}:{legacyCode}"));
-        return new Guid(hash).ToString("N");
     }
 }

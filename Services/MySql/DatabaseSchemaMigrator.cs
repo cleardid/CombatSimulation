@@ -48,6 +48,11 @@ internal static class DatabaseSchemaMigrator
                 EnsureIndex(db, "t_d_node", "ix_t_d_node_parent", "`d_n_ParentCode`");
                 EnsureIndex(db, "t_d_node", "ix_t_d_node_part", "`d_n_PartCode`");
             });
+
+            ApplyMigration(db, currentVersion, 4, "统一旧版标识与跨表引用", () =>
+            {
+                LegacyIdentifierMigrator.Apply(db);
+            });
         }
     }
 
@@ -146,4 +151,3 @@ internal static class DatabaseSchemaMigrator
         }
     }
 }
-

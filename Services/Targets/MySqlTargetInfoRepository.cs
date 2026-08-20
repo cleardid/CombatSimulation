@@ -1,10 +1,7 @@
 using CombatSimulation.Models;
 using CombatSimulation.Models.Unity;
-using CombatSimulation.Services.DamageTrees;
 using CombatSimulation.Services.MySql;
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace CombatSimulation.Services.Targets;
 /// <summary>
@@ -62,8 +59,6 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
         MySqlLog.Log("开始读取目标信息。 ");
 
         using LoadAndWriteDb db = OpenDb();
-        EnsureGuidIdentifiers(db);
-
         List<Target_Info_By_MySQL> targetRows = db.GetTableData<Target_Info_By_MySQL>();
         List<Target_System_Info_By_MySQL> systemRows = db.GetTableData<Target_System_Info_By_MySQL>();
         List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
@@ -85,9 +80,6 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
 
         return db.ExecuteInTransaction(IsolationLevel.RepeatableRead, () =>
         {
-            EnsureGuidIdentifiers(db);
-            MySqlDamageTreeRepository.EnsureGuidIdentifiers(db);
-
             CombatDatabaseSnapshot snapshot = new();
             snapshot.Targets.AddRange(db.GetTableData<Target_Info_By_MySQL>().Select(ToUnityTargetRecord));
             snapshot.TargetSystems.AddRange(db.GetTableData<Target_System_Info_By_MySQL>().Select(ToUnityTargetSystemRecord));
@@ -415,132 +407,6 @@ public sealed class MySqlTargetInfoRepository : ITargetInfoRepository
         db.CreateTable<Damage_Tree_Info_By_MySQL>();
         db.CreateTable<Damage_Node_Info_By_MySQL>();
         MySqlLog.Log("目标信息表检查完成：t_t_info、t_t_system、t_t_part、t_d_tree、t_d_node。 ");
-    }
-
-    /// <summary>
-    /// 将历史导入数据中的整型或其他非 GUID 标识迁移为 GUID 字符串。
-    /// </summary>
-    /// <remarks>
-    /// 目标、系统、部件三张表当前以字符串字段保存唯一标识。
-    /// 如果旧数据中保存的是 1、2、3 这类整型字符串，WPF 与 Unity 后续交互会把它们统一转换为 GUID。
-    /// 这里使用“实体类型 + 旧标识”生成确定性 GUID，避免同一份旧数据在多次启动中转换出不同结果。
-    /// </remarks>
-    private static void EnsureGuidIdentifiers(LoadAndWriteDb db)
-    {
-        db.ExecuteInTransaction(() =>
-        {
-        List<Target_Info_By_MySQL> targetRows = db.GetTableData<Target_Info_By_MySQL>();
-        List<Target_System_Info_By_MySQL> systemRows = db.GetTableData<Target_System_Info_By_MySQL>();
-        List<Target_Part_Info_By_MySQL> partRows = db.GetTableData<Target_Part_Info_By_MySQL>();
-
-        Dictionary<string, string> targetCodeMap = CreateGuidCodeMap("target", targetRows.Select(item => item.TargetCode));
-        Dictionary<string, string> systemCodeMap = CreateGuidCodeMap("system", systemRows.Select(item => item.SystemCode));
-        Dictionary<string, string> partCodeMap = CreateGuidCodeMap("part", partRows.Select(item => item.PartCode));
-
-        if (targetCodeMap.Count == 0 && systemCodeMap.Count == 0 && partCodeMap.Count == 0)
-        {
-            return;
-        }
-
-        MySqlLog.Log($"检测到旧版非 GUID 唯一标识，开始迁移：目标 {targetCodeMap.Count} 条，系统 {systemCodeMap.Count} 条，部件 {partCodeMap.Count} 条。 ");
-
-        foreach (Target_Info_By_MySQL row in targetRows)
-        {
-            string oldCode = NormalizeCode(row.TargetCode);
-            string newCode = ConvertCode(oldCode, targetCodeMap);
-            if (!string.Equals(oldCode, newCode, StringComparison.Ordinal))
-            {
-                db.mySqlCommand_TJ.DeleteByID<Target_Info_By_MySQL>(oldCode);
-                row.TargetCode = newCode;
-            }
-
-            db.mySqlCommand_TJ.Insert(row);
-        }
-
-        foreach (Target_System_Info_By_MySQL row in systemRows)
-        {
-            string oldSystemCode = NormalizeCode(row.SystemCode);
-            string newSystemCode = ConvertCode(oldSystemCode, systemCodeMap);
-            if (!string.Equals(oldSystemCode, newSystemCode, StringComparison.Ordinal))
-            {
-                db.mySqlCommand_TJ.DeleteByID<Target_System_Info_By_MySQL>(oldSystemCode);
-                row.SystemCode = newSystemCode;
-            }
-
-            row.TargetCode = ConvertCode(row.TargetCode, targetCodeMap);
-            row.ParentCode = ConvertReferenceCode(row.ParentCode, systemCodeMap);
-            db.mySqlCommand_TJ.Insert(row);
-        }
-
-        foreach (Target_Part_Info_By_MySQL row in partRows)
-        {
-            string oldPartCode = NormalizeCode(row.PartCode);
-            string newPartCode = ConvertCode(oldPartCode, partCodeMap);
-            if (!string.Equals(oldPartCode, newPartCode, StringComparison.Ordinal))
-            {
-                db.mySqlCommand_TJ.DeleteByID<Target_Part_Info_By_MySQL>(oldPartCode);
-                row.PartCode = newPartCode;
-            }
-
-            row.PartSystemCode = ConvertCode(row.PartSystemCode, systemCodeMap);
-            // 旧版数据迁移时顺便规范颜色格式，保证写回数据库后就是 Unity 所需的 #RRGGBB0F。
-            row.PartColor = TargetPartColorFormat.ToUnityDatabaseColor(row.PartColor);
-            db.mySqlCommand_TJ.Insert(row);
-        }
-
-        MySqlLog.Log("旧版非 GUID 唯一标识迁移完成。 ");
-        });
-    }
-
-    private static Dictionary<string, string> CreateGuidCodeMap(string scope, IEnumerable<string?> codes)
-    {
-        Dictionary<string, string> result = new(StringComparer.Ordinal);
-        foreach (string? rawCode in codes)
-        {
-            string code = NormalizeCode(rawCode);
-            if (string.IsNullOrWhiteSpace(code) || IsGuidIdentifier(code) || result.ContainsKey(code))
-            {
-                continue;
-            }
-
-            result.Add(code, CreateDeterministicGuid(scope, code));
-        }
-
-        return result;
-    }
-
-    private static string ConvertCode(string? rawCode, IReadOnlyDictionary<string, string> codeMap)
-    {
-        string code = NormalizeCode(rawCode);
-        return codeMap.TryGetValue(code, out string? convertedCode) ? convertedCode : code;
-    }
-
-    private static string ConvertReferenceCode(string? rawCode, IReadOnlyDictionary<string, string> codeMap)
-    {
-        string code = NormalizeCode(rawCode);
-        if (string.IsNullOrWhiteSpace(code) || code == "-1")
-        {
-            return "-1";
-        }
-
-        return codeMap.TryGetValue(code, out string? convertedCode) ? convertedCode : code;
-    }
-
-    private static string NormalizeCode(string? code)
-    {
-        return code?.Trim() ?? string.Empty;
-    }
-
-    private static bool IsGuidIdentifier(string code)
-    {
-        return Guid.TryParse(code, out _);
-    }
-
-    private static string CreateDeterministicGuid(string scope, string legacyCode)
-    {
-        using MD5 md5 = MD5.Create();
-        byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes($"CombatSimulation:{scope}:{legacyCode}"));
-        return new Guid(hash).ToString("N");
     }
 
     private static IReadOnlyList<TargetInfoItem> BuildTargets(
