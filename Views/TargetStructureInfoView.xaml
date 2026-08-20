@@ -3,10 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="clr-namespace:CombatSimulation.Models"
              xmlns:unityControls="clr-namespace:CombatSimulation.Controls"
-             xmlns:util="clr-namespace:CombatSimulation.Util"
-             Loaded="OnLoaded"
-             Unloaded="OnUnloaded"
-             IsVisibleChanged="OnIsVisibleChanged">
+             xmlns:util="clr-namespace:CombatSimulation.Util">
 
     <!-- 不要设置 DataContext。
          这里继承 TargetInfoView 的 TargetInfoViewModel。 -->
@@ -197,10 +194,7 @@
                 <unityControls:UnityHostControl x:Name="UnityNativeHost"
                                                 HorizontalAlignment="Stretch"
                                                 VerticalAlignment="Stretch"
-                                                Focusable="False"
-                                                NativeHostChanged="OnUnityNativeHostChanged"
-                                                NativeHostDestroying="OnUnityNativeHostDestroying"
-                                                NativeHostBoundsChanged="OnUnityNativeHostBoundsChanged" />
+                                                Focusable="False" />
             </Border>
 
             <Grid Grid.Row="1"
