@@ -21,7 +21,10 @@ internal static class Program
             ("视图模型构造不访问数据库且释放事件", ViewModelConstructionAndDisposalAreSideEffectSafe),
             ("Unity快照使用独立协议DTO", UnitySnapshotUsesIndependentProtocolDtos),
             ("删除异常由视图模型接收并保留界面数据", DeleteExceptionIsHandledByViewModel),
-            ("删除命令必须通过用户确认", DeleteCommandRequiresConfirmation)
+            ("删除命令必须通过用户确认", DeleteCommandRequiresConfirmation),
+            ("毁伤树领域服务归一化并拒绝重复等级", DamageTreeEditorNormalizesAndRejectsDuplicateLevels),
+            ("毁伤树领域服务校验嵌套系统部件", DamageTreeEditorValidatesNestedParts),
+            ("目标结构领域服务同步系统外键", TargetStructureEditorSynchronizesSystemReferences)
         };
 
         int failedCount = 0;
@@ -152,6 +155,124 @@ internal static class Program
         AssertEqual(1, targetRepository.DeleteTargetCount);
         AssertEqual(false, viewModel.Targets.Contains(target));
         viewModel.Dispose();
+    }
+    private static void DamageTreeEditorNormalizesAndRejectsDuplicateLevels()
+    {
+        DamageTreeEditor editor = new();
+        TargetInfoItem target = new() { Code = "target-1", Name = "目标一" };
+        DamageTreeInfoItem existing = new()
+        {
+            DamageTreeCode = "tree-light",
+            DamageTreeName = "轻度树",
+            DamageLevelInfo = DamageTreeDefaults.LightDamageLevel
+        };
+
+        DamageTreeInfoItem draft = editor.CreateTreeDraft(target, new[] { existing });
+        AssertEqual(DamageTreeDefaults.MediumDamageLevel, draft.DamageLevelInfo);
+        AssertEqual(target.Code, draft.TargetCode);
+        AssertEqual(1, draft.RootNodes.Count);
+
+        DamageTreeInfoItem duplicate = new()
+        {
+            DamageTreeName = "  重复轻度树  ",
+            DamageLevelInfo = "轻微"
+        };
+        DamageTreeValidationResult validation = editor.NormalizeAndValidateTree(
+            duplicate,
+            target,
+            new[] { existing },
+            except: null);
+
+        AssertEqual(false, validation.IsValid);
+        AssertEqual("重复轻度树", duplicate.DamageTreeName);
+        AssertContains("已经存在轻度毁伤树", validation.ErrorMessage);
+
+        DamageTreeLoadPreparation preparation = editor.PrepareLoadedTrees(new[]
+        {
+            new DamageTreeInfoItem { DamageLevelInfo = "轻微" },
+            new DamageTreeInfoItem { DamageLevelInfo = DamageTreeDefaults.LightDamageLevel },
+            new DamageTreeInfoItem { DamageLevelInfo = "未知等级" }
+        });
+        AssertEqual(1, preparation.Trees.Count);
+        AssertEqual(2, preparation.SkippedTreeCount);
+        AssertEqual(DamageTreeDefaults.DefaultTreeType, preparation.Trees[0].DamageTreeType);
+    }
+
+    private static void DamageTreeEditorValidatesNestedParts()
+    {
+        DamageTreeEditor editor = new();
+        TargetPartInfoItem part = new() { PartCode = "part-nested", PartName = "嵌套部件" };
+        TargetSystemInfoItem childSystem = new() { SystemCode = "child-system" };
+        childSystem.Parts.Add(part);
+        TargetSystemInfoItem topSystem = new() { SystemCode = "top-system" };
+        topSystem.ChildSystems.Add(childSystem);
+        TargetInfoItem target = new() { Code = "target-2", Name = "目标二" };
+        target.Systems.Add(topSystem);
+
+        DamageTreeInfoItem tree = new() { DamageTreeCode = "tree-1" };
+        DamageTreeNodeItem root = new()
+        {
+            NodeCode = "root-1",
+            DamageTreeCode = tree.DamageTreeCode,
+            NodeName = "根节点",
+            RelationType = DamageNodeRelationType.And
+        };
+        tree.RootNodes.Add(root);
+
+        DamageTreeNodeItem leaf = new()
+        {
+            NodeCode = "leaf-1",
+            DamageTreeCode = tree.DamageTreeCode,
+            NodeName = "叶子节点",
+            RelationType = DamageNodeRelationType.None,
+            PartCode = part.PartCode,
+            PartName = part.PartName
+        };
+
+        DamageTreeValidationResult validation = editor.NormalizeAndValidateNode(
+            leaf,
+            tree,
+            target,
+            except: null);
+        AssertEqual(true, validation.IsValid);
+        AssertEqual(part, editor.BuildPartLookup(target)[part.PartCode]);
+    }
+
+    private static void TargetStructureEditorSynchronizesSystemReferences()
+    {
+        TargetStructureEditor editor = new();
+        TargetSystemInfoItem system = new()
+        {
+            SystemCode = "system-old",
+            SystemName = "旧系统",
+            TargetCode = "target-3"
+        };
+        TargetPartInfoItem part = new() { PartCode = "part-1", SystemCode = system.SystemCode };
+        TargetSystemInfoItem child = new()
+        {
+            SystemCode = "system-child",
+            ParentSystemCode = system.SystemCode,
+            TargetCode = system.TargetCode
+        };
+        system.Parts.Add(part);
+        system.ChildSystems.Add(child);
+
+        TargetSystemInfoItem edited = new()
+        {
+            SystemCode = "system-new",
+            SystemName = "新系统",
+            TargetCode = system.TargetCode
+        };
+        editor.ApplySystemUpdate(system, edited, "system-old");
+
+        AssertEqual("system-new", system.SystemCode);
+        AssertEqual("system-new", part.SystemCode);
+        AssertEqual("system-new", child.ParentSystemCode);
+
+        TargetInfoItem target = new();
+        target.Systems.Add(system);
+        AssertEqual(true, editor.IsSystemCodeUsed(target, child.SystemCode, except: null));
+        AssertEqual(true, editor.IsPartCodeUsed(target, part.PartCode, except: null));
     }
     private static void AssertEqual<T>(T expected, T actual)
     {
