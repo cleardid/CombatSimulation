@@ -1,7 +1,6 @@
 ﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
@@ -9,7 +8,7 @@ namespace CombatSimulation.ViewModels;
 /// 目标添加/修改弹窗 ViewModel。
 /// 只负责字段绑定、校验和生成编辑结果，不直接操作 TextBox 等 UI 元素。
 /// </summary>
-public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialogRequestClose
+public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialogRequestClose, IDialogRequestMessage
 {
     private readonly string _targetCode;
 
@@ -25,6 +24,7 @@ public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialo
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+    public event EventHandler<DialogMessageRequestedEventArgs>? MessageRequested;
 
     public TargetInfoItem EditedTarget { get; private set; }
 
@@ -108,6 +108,6 @@ public sealed partial class TargetEditDialogViewModel : ObservableObject, IDialo
     private void ShowValidationMessage(string message)
     {
         ValidationMessage = message;
-        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(message, DialogTitle));
     }
 }

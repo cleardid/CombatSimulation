@@ -1,14 +1,13 @@
 using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
 /// <summary>
 /// 毁伤树基础信息添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, IDialogRequestClose
+public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, IDialogRequestClose, IDialogRequestMessage
 {
     public DamageTreeEditDialogViewModel(DamageTreeInfoItem tree, string targetName, bool isEditMode)
     {
@@ -25,6 +24,7 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, ID
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+    public event EventHandler<DialogMessageRequestedEventArgs>? MessageRequested;
 
     /// <summary>
     /// 毁伤等级固定为轻度、中度、重度三档；新增或修改时只能从这里选择。
@@ -158,6 +158,6 @@ public sealed partial class DamageTreeEditDialogViewModel : ObservableObject, ID
     private void ShowValidationMessage(string message)
     {
         ValidationMessage = message;
-        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(message, DialogTitle));
     }
 }

@@ -3,14 +3,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 /// <summary>
 /// 目标部件添加/修改弹窗 ViewModel。
 /// 负责 ComboBox 数据源、动态形状参数、数值校验和编辑结果生成。
 /// </summary>
-public sealed partial class TargetPartEditDialogViewModel : ObservableObject, IDialogRequestClose
+public sealed partial class TargetPartEditDialogViewModel : ObservableObject, IDialogRequestClose, IDialogRequestMessage
 {
     private static readonly IReadOnlyList<string> DefaultMaterialOptions = new[]
     {
@@ -69,6 +68,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+    public event EventHandler<DialogMessageRequestedEventArgs>? MessageRequested;
 
     public TargetPartInfoItem EditedPart { get; private set; }
 
@@ -368,7 +368,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
         }
 
         ValidationMessage = $"{fieldName} 必须是有效数字。";
-        MessageBox.Show(ValidationMessage, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(ValidationMessage, DialogTitle));
         return false;
     }
 
@@ -431,7 +431,7 @@ public sealed partial class TargetPartEditDialogViewModel : ObservableObject, ID
     private void ShowValidationMessage(string message)
     {
         ValidationMessage = message;
-        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(message, DialogTitle));
     }
 }
 

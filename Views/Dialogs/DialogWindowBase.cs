@@ -63,6 +63,20 @@ public class DialogWindowBase : Window
     protected void BindCloseRequest(IDialogRequestClose viewModel)
     {
         viewModel.CloseRequested += OnDialogCloseRequested;
+        if (viewModel is IDialogRequestMessage messageSource)
+        {
+            messageSource.MessageRequested += OnDialogMessageRequested;
+        }
+    }
+
+    private void OnDialogMessageRequested(object? sender, DialogMessageRequestedEventArgs e)
+    {
+        MessageBox.Show(
+            this,
+            e.Message,
+            e.Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private void OnDialogCloseRequested(object? sender, DialogCloseRequestedEventArgs e)

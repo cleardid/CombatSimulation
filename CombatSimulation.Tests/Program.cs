@@ -24,7 +24,8 @@ internal static class Program
             ("删除命令必须通过用户确认", DeleteCommandRequiresConfirmation),
             ("毁伤树领域服务归一化并拒绝重复等级", DamageTreeEditorNormalizesAndRejectsDuplicateLevels),
             ("毁伤树领域服务校验嵌套系统部件", DamageTreeEditorValidatesNestedParts),
-            ("目标结构领域服务同步系统外键", TargetStructureEditorSynchronizesSystemReferences)
+            ("目标结构领域服务同步系统外键", TargetStructureEditorSynchronizesSystemReferences),
+            ("弹窗校验通过消息协议通知窗口", DialogValidationRequestsMessageWithoutWpfDependency)
         };
 
         int failedCount = 0;
@@ -274,6 +275,26 @@ internal static class Program
         AssertEqual(true, editor.IsSystemCodeUsed(target, child.SystemCode, except: null));
         AssertEqual(true, editor.IsPartCodeUsed(target, part.PartCode, except: null));
     }
+    private static void DialogValidationRequestsMessageWithoutWpfDependency()
+    {
+        TargetEditDialogViewModel viewModel = new(new TargetInfoItem(), isEditMode: false);
+        string requestedMessage = string.Empty;
+        string requestedTitle = string.Empty;
+        bool closeRequested = false;
+        viewModel.MessageRequested += (_, e) =>
+        {
+            requestedMessage = e.Message;
+            requestedTitle = e.Title;
+        };
+        viewModel.CloseRequested += (_, _) => closeRequested = true;
+
+        viewModel.SaveCommand.Execute(null);
+
+        AssertEqual("请输入目标名称。", requestedMessage);
+        AssertEqual("添加目标信息", requestedTitle);
+        AssertEqual(false, closeRequested);
+    }
+
     private static void AssertEqual<T>(T expected, T actual)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))

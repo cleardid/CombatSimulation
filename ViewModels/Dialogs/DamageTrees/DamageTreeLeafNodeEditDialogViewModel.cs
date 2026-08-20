@@ -2,14 +2,13 @@ using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
-using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
 /// <summary>
 /// 毁伤树叶子节点添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableObject, IDialogRequestClose
+public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableObject, IDialogRequestClose, IDialogRequestMessage
 {
     private bool _suppressPartSelectionNameSync;
 
@@ -33,6 +32,7 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+    public event EventHandler<DialogMessageRequestedEventArgs>? MessageRequested;
 
     /// <summary>
     /// 目标结构树根节点集合，用于让用户选择底层部件。
@@ -158,6 +158,6 @@ public sealed partial class DamageTreeLeafNodeEditDialogViewModel : ObservableOb
     private void ShowValidationMessage(string message)
     {
         ValidationMessage = message;
-        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(message, DialogTitle));
     }
 }

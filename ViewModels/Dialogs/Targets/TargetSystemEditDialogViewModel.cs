@@ -1,14 +1,13 @@
 ﻿using CombatSimulation.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Windows;
 
 namespace CombatSimulation.ViewModels;
 
 /// <summary>
 /// 目标系统添加/修改弹窗 ViewModel。
 /// </summary>
-public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, IDialogRequestClose
+public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, IDialogRequestClose, IDialogRequestMessage
 {
     private readonly string _targetCode;
     private readonly string _parentSystemCode;
@@ -41,6 +40,7 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
     }
 
     public event EventHandler<DialogCloseRequestedEventArgs>? CloseRequested;
+    public event EventHandler<DialogMessageRequestedEventArgs>? MessageRequested;
 
     public TargetSystemInfoItem EditedSystem { get; private set; }
 
@@ -169,6 +169,6 @@ public sealed partial class TargetSystemEditDialogViewModel : ObservableObject, 
     private void ShowValidationMessage(string message)
     {
         ValidationMessage = message;
-        MessageBox.Show(message, DialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageRequested?.Invoke(this, new DialogMessageRequestedEventArgs(message, DialogTitle));
     }
 }
