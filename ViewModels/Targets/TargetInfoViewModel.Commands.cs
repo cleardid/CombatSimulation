@@ -48,7 +48,7 @@ public sealed partial class TargetInfoViewModel
     [RelayCommand]
     private async Task RequestAddTargetAsync()
     {
-        TargetInfoItem? edited = _interactionService.EditTarget(CreateTargetDraft(), isEditMode: false);
+        TargetInfoItem? edited = _interactionService.EditTarget(_targetStructureEditor.CreateTargetDraft(Targets), isEditMode: false);
         if (edited != null)
         {
             ShowOperationFailure(await AddTargetAsync(edited));
@@ -145,7 +145,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         SelectStructureNode(parentNode);
-        TargetSystemInfoItem? edited = _interactionService.EditSystem(CreateChildSystemDraft(parentNode), isEditMode: false, Targets);
+        TargetSystemInfoItem? edited = _interactionService.EditSystem(_targetStructureEditor.CreateSystemDraft(parentNode, SelectedTarget), isEditMode: false, Targets);
         if (edited != null)
         {
             ShowOperationFailure(await AddChildSystemAsync(parentNode, edited));
@@ -162,7 +162,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         SelectStructureNode(parentNode);
-        TargetPartInfoItem? edited = _interactionService.EditPart(CreateChildPartDraft(parentNode), isEditMode: false);
+        TargetPartInfoItem? edited = _interactionService.EditPart(_targetStructureEditor.CreatePartDraft(parentNode, SelectedTarget), isEditMode: false);
         if (edited != null)
         {
             ShowOperationFailure(await AddChildPartAsync(parentNode, edited));

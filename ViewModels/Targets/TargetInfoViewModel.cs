@@ -24,6 +24,7 @@ public sealed partial class TargetInfoViewModel : ObservableObject, IDisposable
     private const string AllTargetCategory = "全部类型";
 
     private readonly ITargetInfoRepository _targetInfoRepository;
+    private readonly TargetStructureEditor _targetStructureEditor = new();
     private readonly IDamageTreeRepository _damageTreeRepository;
     private readonly DamageTreeEditor _damageTreeEditor = new();
     private readonly ITargetInteractionService _interactionService;

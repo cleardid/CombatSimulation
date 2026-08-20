@@ -1,65 +1,10 @@
 using CombatSimulation.Models;
-using CombatSimulation.Services.Targets;
-using CombatSimulation.Services.Unity;
 using System.Diagnostics;
 
 namespace CombatSimulation.ViewModels;
 
 public sealed partial class TargetInfoViewModel
 {
-    /// <summary>
-    /// 根据当前选中的父节点创建一个系统编辑草稿。
-    /// </summary>
-    /// <remarks>
-    /// 该方法只生成内存草稿，不写数据库。用户在弹窗中确认保存后，才会调用 AddChildSystemAsync。
-    /// </remarks>
-    public TargetSystemInfoItem CreateChildSystemDraft(TargetStructureTreeNode parentNode)
-    {
-        // 父节点是目标根节点时，新系统属于顶层系统；父节点是系统节点时，新系统属于子系统。
-        bool isTopSystem = parentNode.Target != null;
-        string targetCode = parentNode.Target?.Code ?? parentNode.System?.TargetCode ?? SelectedTarget?.Code ?? string.Empty;
-        string parentSystemCode = isTopSystem ? "-1" : (parentNode.System?.SystemCode ?? "-1");
-
-        return new TargetSystemInfoItem
-        {
-            SystemCode = CreateUniqueSystemCode(),
-            SystemName = isTopSystem ? "新建顶层系统" : "新建子系统",
-            SystemDescription = string.Empty,
-            IsTopSystem = isTopSystem,
-            ParentSystemCode = parentSystemCode,
-            TargetCode = targetCode
-        };
-    }
-
-    /// <summary>
-    /// 根据当前选中的系统节点创建一个部件编辑草稿。
-    /// </summary>
-    /// <remarks>
-    /// 新建部件默认使用长方体参数模板。参数语义由 TargetPartShapeParameterDefinitions 统一维护。
-    /// </remarks>
-    public TargetPartInfoItem CreateChildPartDraft(TargetStructureTreeNode parentNode)
-    {
-        return new TargetPartInfoItem
-        {
-            PartCode = CreateUniquePartCode(),
-            PartName = "新建部件",
-            ShapeType = "长方体",
-            PartDescription = string.Empty,
-            MaterialId = "Fe",
-            DisplayColor = TargetPartColorFormat.DefaultWpfDisplayColor,
-            EquivalentThickness = 0,
-            VulnerableArea = 0,
-            SystemCode = parentNode.System?.SystemCode ?? string.Empty,
-            CenterX = 0,
-            CenterY = 0,
-            CenterZ = 0,
-            RotationX = 0,
-            RotationY = 0,
-            RotationZ = 0,
-            Parameters = TargetPartShapeParameterDefinitions.CreateDefaultParameters("长方体")
-        };
-    }
-
     /// <summary>
     /// 添加顶层系统或子系统，并同步数据库、本地模型和结构树节点。
     /// </summary>
@@ -71,7 +16,7 @@ public sealed partial class TargetInfoViewModel
             return false;
         }
 
-        if (IsSystemCodeUsed(newSystem.SystemCode, except: null))
+        if (_targetStructureEditor.IsSystemCodeUsed(SelectedTarget, newSystem.SystemCode, except: null))
         {
             StatusText = $"系统唯一标识已存在：{newSystem.SystemCode}";
             return false;
@@ -130,7 +75,7 @@ public sealed partial class TargetInfoViewModel
             return false;
         }
 
-        if (IsPartCodeUsed(newPart.PartCode, except: null))
+        if (_targetStructureEditor.IsPartCodeUsed(SelectedTarget, newPart.PartCode, except: null))
         {
             StatusText = $"部件唯一标识已存在：{newPart.PartCode}";
             return false;
@@ -185,7 +130,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         TargetSystemInfoItem system = node.System;
-        if (IsSystemCodeUsed(editedSystem.SystemCode, system))
+        if (_targetStructureEditor.IsSystemCodeUsed(SelectedTarget, editedSystem.SystemCode, system))
         {
             StatusText = $"系统唯一标识已存在：{editedSystem.SystemCode}";
             return false;
@@ -199,33 +144,7 @@ public sealed partial class TargetInfoViewModel
             string targetCode = SelectedTarget.Code;
             await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdateSystemAsync(targetCode, oldSystemCode, editedSystem));
 
-            // 数据库成功后再覆盖当前内存对象。这样 TreeView 绑定对象不会被整体替换。
-            system.SystemName = editedSystem.SystemName;
-            system.SystemCode = editedSystem.SystemCode;
-            system.SystemDescription = editedSystem.SystemDescription;
-            system.IsTopSystem = editedSystem.IsTopSystem;
-            system.ParentSystemCode = editedSystem.ParentSystemCode;
-            system.TargetCode = editedSystem.TargetCode;
-
-            if (!string.Equals(oldSystemCode, system.SystemCode, StringComparison.Ordinal))
-            {
-                // 系统编号是子系统和部件的外键。本地对象也要和数据库保持一致。
-                foreach (TargetPartInfoItem part in system.Parts)
-                {
-                    if (string.Equals(part.SystemCode, oldSystemCode, StringComparison.Ordinal))
-                    {
-                        part.SystemCode = system.SystemCode;
-                    }
-                }
-
-                foreach (TargetSystemInfoItem childSystem in system.ChildSystems)
-                {
-                    if (string.Equals(childSystem.ParentSystemCode, oldSystemCode, StringComparison.Ordinal))
-                    {
-                        childSystem.ParentSystemCode = system.SystemCode;
-                    }
-                }
-            }
+            _targetStructureEditor.ApplySystemUpdate(system, editedSystem, oldSystemCode);
 
             node.SyncFromModel();
             RefreshSelectedDetailRows(node);
@@ -259,7 +178,7 @@ public sealed partial class TargetInfoViewModel
         }
 
         TargetPartInfoItem part = node.Part;
-        if (IsPartCodeUsed(editedPart.PartCode, part))
+        if (_targetStructureEditor.IsPartCodeUsed(SelectedTarget, editedPart.PartCode, part))
         {
             StatusText = $"部件唯一标识已存在：{editedPart.PartCode}";
             return false;
@@ -275,7 +194,7 @@ public sealed partial class TargetInfoViewModel
             await RunRepositoryOperationAsync(() => _targetInfoRepository.UpdatePartAsync(targetCode, oldPartCode, editedPart));
 
             // 不替换 part 实例，直接复制属性。这样 TreeView、详情面板、弹窗引用都能继续使用同一对象。
-            ApplyPartUpdate(part, editedPart);
+            _targetStructureEditor.ApplyPartUpdate(part, editedPart);
 
             node.SyncFromModel();
             RefreshSelectedDetailRows(node);
@@ -296,41 +215,6 @@ public sealed partial class TargetInfoViewModel
             StatusText = $"修改部件失败：{ex.Message}";
             Debug.WriteLine($"[TargetInfoViewModel] 修改部件失败：{ex}");
             return false;
-        }
-    }
-
-    /// <summary>
-    /// 将编辑草稿中的部件信息复制回结构树正在绑定的部件对象。
-    /// </summary>
-    private static void ApplyPartUpdate(TargetPartInfoItem part, TargetPartInfoItem editedPart)
-    {
-        part.PartCode = editedPart.PartCode;
-        part.PartName = editedPart.PartName;
-        part.ShapeType = editedPart.ShapeType;
-        part.PartDescription = editedPart.PartDescription;
-        part.MaterialId = editedPart.MaterialId;
-        part.DisplayColor = editedPart.DisplayColor;
-        part.EquivalentThickness = editedPart.EquivalentThickness;
-        part.VulnerableArea = editedPart.VulnerableArea;
-        part.SystemCode = editedPart.SystemCode;
-        part.CenterX = editedPart.CenterX;
-        part.CenterY = editedPart.CenterY;
-        part.CenterZ = editedPart.CenterZ;
-        part.RotationX = editedPart.RotationX;
-        part.RotationY = editedPart.RotationY;
-        part.RotationZ = editedPart.RotationZ;
-
-        // 参数集合采用清空后重建，确保形状变化时旧参数不会残留。
-        part.Parameters.Clear();
-        foreach (TargetPartParameterItem parameter in editedPart.Parameters.OrderBy(item => item.Index))
-        {
-            part.Parameters.Add(new TargetPartParameterItem
-            {
-                Index = parameter.Index,
-                Name = parameter.Name,
-                Value = parameter.Value,
-                Unit = parameter.Unit
-            });
         }
     }
 

@@ -1,4 +1,5 @@
 ﻿using CombatSimulation.Models;
+using CombatSimulation.Services.Targets;
 using System.Diagnostics;
 
 namespace CombatSimulation.ViewModels;
@@ -6,17 +7,20 @@ namespace CombatSimulation.ViewModels;
 public sealed partial class TargetInfoViewModel
 {
     /// <summary>
-    /// 创建新增目标弹窗使用的目标草稿。
+    /// 调用领域服务规范化并校验目标，将失败原因投影到界面状态。
     /// </summary>
-    public TargetInfoItem CreateTargetDraft()
+    private bool NormalizeAndValidateTarget(TargetInfoItem target, TargetInfoItem? except)
     {
-        return new TargetInfoItem
+        TargetStructureValidationResult result = _targetStructureEditor.NormalizeAndValidateTarget(
+            target,
+            Targets,
+            except);
+        if (!result.IsValid)
         {
-            Code = CreateUniqueTargetCode(),
-            Name = "新建目标",
-            Category = "未分类",
-            Description = string.Empty
-        };
+            StatusText = result.ErrorMessage;
+        }
+
+        return result.IsValid;
     }
 
     /// <summary>
@@ -24,9 +28,7 @@ public sealed partial class TargetInfoViewModel
     /// </summary>
     public async Task<bool> AddTargetAsync(TargetInfoItem newTarget)
     {
-        NormalizeTarget(newTarget);
-
-        if (!ValidateTarget(newTarget, except: null))
+        if (!NormalizeAndValidateTarget(newTarget, except: null))
         {
             return false;
         }
@@ -73,9 +75,7 @@ public sealed partial class TargetInfoViewModel
 
         // 目标唯一标识不允许通过基础信息弹窗修改，避免影响系统和部件外键。
         editedTarget.Code = target.Code;
-        NormalizeTarget(editedTarget);
-
-        if (!ValidateTarget(editedTarget, except: target))
+        if (!NormalizeAndValidateTarget(editedTarget, except: target))
         {
             return false;
         }

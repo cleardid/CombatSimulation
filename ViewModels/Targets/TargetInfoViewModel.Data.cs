@@ -174,52 +174,6 @@ public sealed partial class TargetInfoViewModel
     }
 
     /// <summary>
-    /// 校验目标名称、类型和唯一标识。
-    /// </summary>
-    private bool ValidateTarget(TargetInfoItem target, TargetInfoItem? except)
-    {
-        if (string.IsNullOrWhiteSpace(target.Name))
-        {
-            StatusText = "请输入目标名称";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(target.Category))
-        {
-            StatusText = "请输入目标种类";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(target.Code))
-        {
-            target.Code = CreateUniqueTargetCode();
-        }
-
-        bool codeUsed = Targets.Any(existingTarget =>
-            !ReferenceEquals(existingTarget, except) &&
-            string.Equals(existingTarget.Code, target.Code, StringComparison.Ordinal));
-
-        if (codeUsed)
-        {
-            StatusText = $"目标唯一标识已存在：{target.Code}";
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// 去除目标字符串字段前后的空白字符。
-    /// </summary>
-    private static void NormalizeTarget(TargetInfoItem target)
-    {
-        target.Name = target.Name.Trim();
-        target.Category = target.Category.Trim();
-        target.Description = target.Description.Trim();
-        target.Code = target.Code.Trim();
-    }
-
-    /// <summary>
     /// 确保目标模型存在结构树根节点。
     /// </summary>
     /// <remarks>
